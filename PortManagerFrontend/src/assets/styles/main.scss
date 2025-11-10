@@ -1,0 +1,51 @@
+// 全局样式
+
+// 滚动条样式
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.5);
+  }
+}
+
+// Element Plus 样式覆盖
+.el-card {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.el-button {
+  border-radius: 6px;
+}
+
+.el-input__wrapper {
+  border-radius: 6px;
+}
+
+.el-select {
+  .el-input__wrapper {
+    border-radius: 6px;
+  }
+}
+
+.el-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.el-dialog {
+  border-radius: 12px;
+  overflow: hidden;
+}
