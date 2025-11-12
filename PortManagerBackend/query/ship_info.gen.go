@@ -36,6 +36,17 @@ func newShipInfo(db *gorm.DB, opts ...gen.DOOption) shipInfo {
 	_shipInfo.ShipType = field.NewString(tableName, "ship_type")
 	_shipInfo.Faction = field.NewString(tableName, "faction")
 	_shipInfo.Level = field.NewInt(tableName, "level")
+	_shipInfo.Stars = field.NewInt(tableName, "stars")
+	_shipInfo.Equipments = shipInfoHasManyEquipments{
+		db: db.Session(&gorm.Session{}),
+
+		RelationField: field.NewRelation("Equipments", "model.ShipEquipment"),
+		Equipment: struct {
+			field.RelationField
+		}{
+			RelationField: field.NewRelation("Equipments.Equipment", "model.Equipment"),
+		},
+	}
 
 	_shipInfo.fillFieldMap()
 
@@ -45,16 +56,18 @@ func newShipInfo(db *gorm.DB, opts ...gen.DOOption) shipInfo {
 type shipInfo struct {
 	shipInfoDo
 
-	ALL       field.Asterisk
-	ID        field.Uint
-	CreatedAt field.Time
-	UpdatedAt field.Time
-	DeletedAt field.Time
-	ShipName  field.String
-	Rarity    field.String
-	ShipType  field.String
-	Faction   field.String
-	Level     field.Int
+	ALL        field.Asterisk
+	ID         field.Uint
+	CreatedAt  field.Time
+	UpdatedAt  field.Time
+	DeletedAt  field.Time
+	ShipName   field.String
+	Rarity     field.String
+	ShipType   field.String
+	Faction    field.String
+	Level      field.Int
+	Stars      field.Int
+	Equipments shipInfoHasManyEquipments
 
 	fieldMap map[string]field.Expr
 }
@@ -80,6 +93,7 @@ func (s *shipInfo) updateTableName(table string) *shipInfo {
 	s.ShipType = field.NewString(table, "ship_type")
 	s.Faction = field.NewString(table, "faction")
 	s.Level = field.NewInt(table, "level")
+	s.Stars = field.NewInt(table, "stars")
 
 	s.fillFieldMap()
 
@@ -96,7 +110,7 @@ func (s *shipInfo) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (s *shipInfo) fillFieldMap() {
-	s.fieldMap = make(map[string]field.Expr, 9)
+	s.fieldMap = make(map[string]field.Expr, 11)
 	s.fieldMap["id"] = s.ID
 	s.fieldMap["created_at"] = s.CreatedAt
 	s.fieldMap["updated_at"] = s.UpdatedAt
@@ -106,6 +120,8 @@ func (s *shipInfo) fillFieldMap() {
 	s.fieldMap["ship_type"] = s.ShipType
 	s.fieldMap["faction"] = s.Faction
 	s.fieldMap["level"] = s.Level
+	s.fieldMap["stars"] = s.Stars
+
 }
 
 func (s shipInfo) clone(db *gorm.DB) shipInfo {
@@ -116,6 +132,76 @@ func (s shipInfo) clone(db *gorm.DB) shipInfo {
 func (s shipInfo) replaceDB(db *gorm.DB) shipInfo {
 	s.shipInfoDo.ReplaceDB(db)
 	return s
+}
+
+type shipInfoHasManyEquipments struct {
+	db *gorm.DB
+
+	field.RelationField
+
+	Equipment struct {
+		field.RelationField
+	}
+}
+
+func (a shipInfoHasManyEquipments) Where(conds ...field.Expr) *shipInfoHasManyEquipments {
+	if len(conds) == 0 {
+		return &a
+	}
+
+	exprs := make([]clause.Expression, 0, len(conds))
+	for _, cond := range conds {
+		exprs = append(exprs, cond.BeCond().(clause.Expression))
+	}
+	a.db = a.db.Clauses(clause.Where{Exprs: exprs})
+	return &a
+}
+
+func (a shipInfoHasManyEquipments) WithContext(ctx context.Context) *shipInfoHasManyEquipments {
+	a.db = a.db.WithContext(ctx)
+	return &a
+}
+
+func (a shipInfoHasManyEquipments) Model(m *model.ShipInfo) *shipInfoHasManyEquipmentsTx {
+	return &shipInfoHasManyEquipmentsTx{a.db.Model(m).Association(a.Name())}
+}
+
+type shipInfoHasManyEquipmentsTx struct{ tx *gorm.Association }
+
+func (a shipInfoHasManyEquipmentsTx) Find() (result []*model.ShipEquipment, err error) {
+	return result, a.tx.Find(&result)
+}
+
+func (a shipInfoHasManyEquipmentsTx) Append(values ...*model.ShipEquipment) (err error) {
+	targetValues := make([]interface{}, len(values))
+	for i, v := range values {
+		targetValues[i] = v
+	}
+	return a.tx.Append(targetValues...)
+}
+
+func (a shipInfoHasManyEquipmentsTx) Replace(values ...*model.ShipEquipment) (err error) {
+	targetValues := make([]interface{}, len(values))
+	for i, v := range values {
+		targetValues[i] = v
+	}
+	return a.tx.Replace(targetValues...)
+}
+
+func (a shipInfoHasManyEquipmentsTx) Delete(values ...*model.ShipEquipment) (err error) {
+	targetValues := make([]interface{}, len(values))
+	for i, v := range values {
+		targetValues[i] = v
+	}
+	return a.tx.Delete(targetValues...)
+}
+
+func (a shipInfoHasManyEquipmentsTx) Clear() error {
+	return a.tx.Clear()
+}
+
+func (a shipInfoHasManyEquipmentsTx) Count() int64 {
+	return a.tx.Count()
 }
 
 type shipInfoDo struct{ gen.DO }

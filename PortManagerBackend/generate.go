@@ -16,6 +16,8 @@ func main() {
 
 	g.ApplyBasic(
 		model.ShipInfo{},
+		model.Equipment{},
+		model.ShipEquipment{},
 	)
 
 	g.Execute()

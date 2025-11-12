@@ -131,3 +131,40 @@ func GetStatistics(ctx context.Context, c *app.RequestContext) {
 
 	c.JSON(consts.StatusOK, resp)
 }
+
+// EquipShip .
+// @router /api/v1/ship/:id/equip [PUT]
+func EquipShip(ctx context.Context, c *app.RequestContext) {
+	var req api.EquipShipReq
+	if err := c.BindAndValidate(&req); err != nil {
+		c.String(consts.StatusBadRequest, err.Error())
+		return
+	}
+
+	resp, err := service.NewShipService(ctx).EquipShip(&req)
+	if err != nil {
+		sendError(c, err)
+		return
+	}
+
+	// 返回装备好之后，最新的舰船状态！
+	c.JSON(consts.StatusOK, resp)
+}
+
+// GetEquipmentList .
+// @router /api/v1/equipments [GET]
+func GetEquipmentList(ctx context.Context, c *app.RequestContext) {
+	var req api.GetEquipmentListReq
+	if err := c.BindAndValidate(&req); err != nil {
+		c.String(consts.StatusBadRequest, err.Error())
+		return
+	}
+
+	resp, err := service.NewShipService(ctx).GetEquipmentList(&req)
+	if err != nil {
+		sendError(c, err)
+		return
+	}
+
+	c.JSON(consts.StatusOK, resp)
+}

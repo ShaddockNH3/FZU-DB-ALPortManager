@@ -68,3 +68,28 @@ export const getStatistics = () => {
     method: 'GET'
   })
 }
+
+/**
+ * 装备舰船
+ * @param {Number} id - 舰船ID
+ * @param {Object} data - 装备数据 { slotIndex: number, equipmentId: number }
+ */
+export const equipShip = (id, data) => {
+  return request({
+    url: `/ship/${id}/equip`,
+    method: 'PUT',
+    data
+  })
+}
+
+/**
+ * 获取装备列表
+ * @param {Object} params - 查询参数
+ */
+export const getEquipmentList = (params) => {
+  return request({
+    url: '/equipments',
+    method: 'GET',
+    params
+  })
+}

@@ -21,9 +21,12 @@ func Register(r *server.Hertz) {
 		_api := root.Group("/api", _apiMw()...)
 		{
 			_v1 := _api.Group("/v1", _v1Mw()...)
+			_v1.GET("/equipments", append(_getequipmentlistMw(), api.GetEquipmentList)...)
 			_v1.POST("/ship", append(_createshipMw(), api.CreateShip)...)
 			_ship := _v1.Group("/ship", _shipMw()...)
 			_ship.DELETE("/:id", append(_deleteshipMw(), api.DeleteShip)...)
+			_id := _ship.Group("/:id", _idMw()...)
+			_id.PUT("/equip", append(_equipshipMw(), api.EquipShip)...)
 			_ship.GET("/:id", append(_getshipbyidMw(), api.GetShipByID)...)
 			_ship.PUT("/:id", append(_updateshipMw(), api.UpdateShip)...)
 			_v1.GET("/ships", append(_getshiplistMw(), api.GetShipList)...)

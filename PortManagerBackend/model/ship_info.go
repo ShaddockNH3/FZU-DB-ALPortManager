@@ -11,14 +11,14 @@ type ShipInfo struct {
 	DeletedAt *time.Time `gorm:"index"`
 
 	ShipName string `gorm:"size:255;index"`
-
-	Rarity string `gorm:"size:64"`
-
+	Rarity   string `gorm:"size:64"`
 	ShipType string `gorm:"size:64;index"`
+	Faction  string `gorm:"size:64;index"`
+	Level    int    `gorm:"default:1"`
 
-	Faction string `gorm:"size:64;index"`
+	Stars int `gorm:"default:1"` // 当前星级，满星后可装备兵装
 
-	Level int `gorm:"default:1"`
+	Equipments []ShipEquipment `gorm:"foreignKey:ShipID;references:ID"`
 }
 
 func (ShipInfo) TableName() string {

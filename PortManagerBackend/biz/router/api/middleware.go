@@ -55,3 +55,18 @@ func _getstatisticsMw() []app.HandlerFunc {
 	// your code...
 	return nil
 }
+
+func _idMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _equipshipMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _getequipmentlistMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}

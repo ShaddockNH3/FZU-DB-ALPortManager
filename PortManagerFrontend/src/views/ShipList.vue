@@ -100,9 +100,32 @@
         </el-table-column>
         <el-table-column prop="shipType" label="舰种" width="120" />
         <el-table-column prop="faction" label="阵营" width="150" />
+        <el-table-column label="星级" width="180">
+          <template #default="{ row }">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <el-button 
+                size="small" 
+                :icon="Minus" 
+                circle 
+                @click="handleStarChange(row, -1)"
+                :disabled="row.stars <= getInitialStarsByRarity(row.rarity)"
+              />
+              <span style="min-width: 80px; text-align: center;">
+                {{ row.stars }}★ {{ row.stars >= getMaxStarsByRarity(row.rarity) ? '(满)' : '' }}
+              </span>
+              <el-button 
+                size="small" 
+                :icon="Plus" 
+                circle 
+                @click="handleStarChange(row, 1)"
+                :disabled="row.stars >= getMaxStarsByRarity(row.rarity)"
+              />
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="level" label="等级" width="100" sortable />
         <el-table-column prop="createdAt" label="创建时间" width="180" />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
             <el-button
               type="primary"
@@ -111,6 +134,13 @@
               @click="handleEdit(row)"
             >
               编辑
+            </el-button>
+            <el-button
+              type="success"
+              size="small"
+              @click="handleEquipment(row)"
+            >
+              装备
             </el-button>
             <el-button
               type="danger"
@@ -209,14 +239,80 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 装备对话框 -->
+    <el-dialog
+      v-model="equipDialogVisible"
+      :title="`装备管理 - ${currentShip?.shipName}`"
+      width="800px"
+      @close="handleEquipDialogClose"
+    >
+      <div v-if="currentShip" class="equipment-container">
+        <div v-for="(slot, index) in currentShip.equipmentSlots" :key="index" class="equipment-slot">
+          <div class="slot-label">装备栏 {{ index + 1 }}</div>
+          <div class="slot-content">
+            <el-tag v-if="slot.equippedItem" type="success" closable @close="handleUnequip(index)">
+              {{ slot.equippedItem.name }}
+            </el-tag>
+            <el-button v-else type="primary" size="small" @click="handleSelectEquipment(index, slot.acceptableTypes)">
+              选择装备
+            </el-button>
+          </div>
+          <div class="acceptable-types">
+            可装备类型: {{ formatAcceptableTypes(slot.acceptableTypes) }}
+          </div>
+        </div>
+        
+        <div v-if="currentShip.augmentSlot" class="equipment-slot augment-slot">
+          <div class="slot-label">兵装栏 <span class="tip">(需满星)</span></div>
+          <div class="slot-content">
+            <el-tag v-if="currentShip.augmentSlot.equippedItem" type="warning" closable @close="handleUnequip(5)">
+              {{ currentShip.augmentSlot.equippedItem.name }}
+            </el-tag>
+            <el-button 
+              v-else 
+              type="primary" 
+              size="small" 
+              @click="handleSelectEquipment(5, currentShip.augmentSlot.acceptableTypes)"
+              :disabled="!isMaxStars(currentShip)"
+            >
+              {{ isMaxStars(currentShip) ? '选择兵装' : '未满星' }}
+            </el-button>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 选择装备对话框 -->
+    <el-dialog
+      v-model="selectEquipDialogVisible"
+      title="选择装备"
+      width="600px"
+    >
+      <el-table
+        :data="filteredEquipments"
+        @row-click="handleEquipmentSelected"
+        highlight-current-row
+        style="width: 100%"
+      >
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="name" label="装备名称" min-width="200" />
+        <el-table-column prop="type" label="类型" width="150">
+          <template #default="{ row }">
+            {{ formatEquipmentType(row.type) }}
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, RefreshRight, Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { Search, RefreshRight, Plus, Edit, Delete, Minus } from '@element-plus/icons-vue'
 import { useShipStore } from '@/stores/ship'
+import { getShipById, equipShip, getEquipmentList } from '@/api/ship'
 
 const shipStore = useShipStore()
 
@@ -253,7 +349,8 @@ const form = reactive({
   rarity: '',
   shipType: '',
   faction: '',
-  level: 1
+  level: 1,
+  stars: 1
 })
 
 // 表单验证规则
@@ -270,6 +367,87 @@ const rules = {
   faction: [
     { required: true, message: '请选择阵营', trigger: 'change' }
   ]
+}
+
+// 获取稀有度对应的初始星级
+const getInitialStarsByRarity = (rarity) => {
+  const initialStarsMap = {
+    '普通': 1,
+    '稀有': 2,
+    '精锐': 2,
+    '超稀有': 3,
+    '海上传奇': 3,
+    '最高方案': 3,
+    '决战方案': 3
+  }
+  return initialStarsMap[rarity] || 1
+}
+
+// 获取稀有度对应的最大星级
+const getMaxStarsByRarity = (rarity) => {
+  const maxStarsMap = {
+    '普通': 4,
+    '稀有': 5,
+    '精锐': 5,
+    '超稀有': 6,
+    '海上传奇': 6,
+    '最高方案': 6,
+    '决战方案': 6
+  }
+  return maxStarsMap[rarity] || 3
+}
+
+// 检查是否满星
+const isMaxStars = (ship) => {
+  if (!ship || !ship.stars || !ship.rarity) return false
+  const maxStars = getMaxStarsByRarity(ship.rarity)
+  return ship.stars >= maxStars
+}
+
+// 根据舰种过滤兵装
+const filterAugmentsByShipType = (augments, shipType) => {
+  const augmentMap = {
+    '驱逐': ['双剑', '单手锤'],
+    '轻巡': ['铁剑', '手弩'],
+    '重巡': ['大剑', '骑枪'],
+    '战列': ['指挥刀', '轻弩'],
+    '战巡': ['指挥刀', '轻弩'],
+    '航母': ['猎弓', '权杖'],
+    '轻航': ['猎弓', '权杖'],
+    '维修': ['维修手弩'],
+    '潜艇': ['短剑', '若无']
+  }
+  
+  const allowedNames = augmentMap[shipType] || []
+  return augments.filter(aug => allowedNames.includes(aug.name))
+}
+
+// 升星/降星
+const handleStarChange = async (row, delta) => {
+  const newStars = row.stars + delta
+  const minStars = getInitialStarsByRarity(row.rarity)
+  const maxStars = getMaxStarsByRarity(row.rarity)
+  
+  if (newStars < minStars || newStars > maxStars) {
+    return
+  }
+  
+  try {
+    // 传递完整的舰船信息，只更新 stars 字段
+    await shipStore.updateShip(row.id, {
+      shipName: row.shipName,
+      rarity: row.rarity,
+      shipType: row.shipType,
+      faction: row.faction,
+      level: row.level,
+      stars: newStars
+    })
+    ElMessage.success(delta > 0 ? '升星成功' : '降星成功')
+    loadData()
+  } catch (error) {
+    console.error('星级调整失败:', error)
+    ElMessage.error('星级调整失败')
+  }
 }
 
 // 获取稀有度标签类型
@@ -429,6 +607,156 @@ const handlePageChange = () => {
   loadData()
 }
 
+// 装备管理
+const equipDialogVisible = ref(false)
+const selectEquipDialogVisible = ref(false)
+const currentShip = ref(null)
+const currentSlotIndex = ref(null)
+const allEquipments = ref([])
+const filteredEquipments = ref([])
+
+// 打开装备对话框
+const handleEquipment = async (row) => {
+  try {
+    // 重新获取最新的舰船数据（包含装备信息）
+    currentShip.value = await getShipById(row.id)
+    console.log('舰船装备信息:', currentShip.value)
+    equipDialogVisible.value = true
+  } catch (error) {
+    console.error('获取舰船装备信息失败:', error)
+    ElMessage.error('获取舰船装备信息失败')
+  }
+}
+
+// 关闭装备对话框
+const handleEquipDialogClose = () => {
+  currentShip.value = null
+  loadData() // 重新加载列表
+}
+
+// 选择装备
+const handleSelectEquipment = async (slotIndex, acceptableTypes) => {
+  currentSlotIndex.value = slotIndex
+  
+  console.log('选择装备 - 栏位:', slotIndex, '可接受类型:', acceptableTypes)
+  
+  // 如果是兵装栏（slotIndex === 5），需要根据舰种过滤
+  const isAugmentSlot = slotIndex === 5
+  
+  // 获取所有装备
+  if (allEquipments.value.length === 0) {
+    try {
+      const data = await getEquipmentList()
+      allEquipments.value = data.equipments || []
+      console.log('所有装备:', allEquipments.value)
+    } catch (error) {
+      console.error('获取装备列表失败:', error)
+      ElMessage.error('获取装备列表失败')
+      return
+    }
+  }
+  
+  // 根据可接受的类型过滤装备
+  let filtered = allEquipments.value.filter(equip => 
+    acceptableTypes.includes(equip.type)
+  )
+  
+  // 如果是兵装栏，进一步根据舰种过滤
+  if (isAugmentSlot) {
+    filtered = filterAugmentsByShipType(filtered, currentShip.value.shipType)
+  }
+  
+  filteredEquipments.value = filtered
+  
+  console.log('过滤后的装备:', filteredEquipments.value)
+  
+  if (filteredEquipments.value.length === 0) {
+    ElMessage.warning('该栏位暂无可用装备')
+    return
+  }
+  
+  selectEquipDialogVisible.value = true
+}
+
+// 装备被选中
+const handleEquipmentSelected = async (equipment) => {
+  try {
+    console.log('装备舰船 - 舰船ID:', currentShip.value.id, '栏位:', currentSlotIndex.value, '装备ID:', equipment.id)
+    
+    const result = await equipShip(currentShip.value.id, {
+      slotIndex: currentSlotIndex.value,
+      equipmentId: equipment.id
+    })
+    
+    console.log('装备结果:', result)
+    
+    ElMessage.success('装备成功')
+    selectEquipDialogVisible.value = false
+    
+    // 重新获取舰船信息
+    currentShip.value = await getShipById(currentShip.value.id)
+    console.log('更新后的舰船信息:', currentShip.value)
+  } catch (error) {
+    console.error('装备失败:', error)
+    ElMessage.error(`装备失败: ${error.message || error}`)
+  }
+}
+
+// 卸下装备
+const handleUnequip = async (slotIndex) => {
+  try {
+    await equipShip(currentShip.value.id, {
+      slotIndex: slotIndex,
+      equipmentId: 0 // 0表示卸下装备
+    })
+    
+    ElMessage.success('卸下装备成功')
+    
+    // 重新获取舰船信息
+    currentShip.value = await getShipById(currentShip.value.id)
+  } catch (error) {
+    console.error('卸下装备失败:', error)
+    ElMessage.error('卸下装备失败')
+  }
+}
+
+// 格式化装备类型
+const formatEquipmentType = (type) => {
+  // type 可能是数字或字符串
+  const typeMap = {
+    0: '驱逐主炮',
+    1: '轻巡主炮',
+    2: '重巡主炮',
+    3: '战列主炮',
+    4: '鱼雷',
+    5: '潜艇鱼雷',
+    6: '防空炮',
+    7: '设备',
+    8: '轰炸机',
+    9: '鱼雷机',
+    10: '战斗机',
+    11: '兵装',
+    'SMALL_CALIBER_MAIN_GUN': '驱逐主炮',
+    'MEDIUM_CALIBER_MAIN_GUN': '轻巡主炮',
+    'LARGE_CALIBER_MAIN_GUN': '重巡主炮',
+    'BATTLESHIP_MAIN_GUN': '战列主炮',
+    'TORPEDO': '鱼雷',
+    'SUBMARINE_TORPEDO': '潜艇鱼雷',
+    'ANTI_AIR_GUN': '防空炮',
+    'AUXILIARY': '设备',
+    'DIVE_BOMBER': '轰炸机',
+    'TORPEDO_BOMBER': '鱼雷机',
+    'FIGHTER': '战斗机',
+    'AUGMENT': '兵装'
+  }
+  return typeMap[type] || type
+}
+
+// 格式化可接受的装备类型
+const formatAcceptableTypes = (types) => {
+  return types.map(t => formatEquipmentType(t)).join(', ')
+}
+
 onMounted(() => {
   loadData()
 })
@@ -452,5 +780,52 @@ onMounted(() => {
     display: flex;
     justify-content: flex-end;
   }
+}
+
+.equipment-container {
+  .equipment-slot {
+    padding: 15px;
+    margin-bottom: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #f9f9f9;
+    
+    &.augment-slot {
+      background: #fff9e6;
+      border-color: #ffd700;
+    }
+    
+    .slot-label {
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 8px;
+      font-size: 14px;
+      
+      .tip {
+        font-size: 12px;
+        color: #999;
+        font-weight: normal;
+      }
+    }
+    
+    .slot-content {
+      margin-bottom: 8px;
+      min-height: 32px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .acceptable-types {
+      font-size: 12px;
+      color: #666;
+      font-style: italic;
+    }
+  }
+}
+
+.form-tip {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
 }
 </style>

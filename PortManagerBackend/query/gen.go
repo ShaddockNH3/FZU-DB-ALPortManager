@@ -16,34 +16,44 @@ import (
 )
 
 var (
-	Q        = new(Query)
-	ShipInfo *shipInfo
+	Q             = new(Query)
+	Equipment     *equipment
+	ShipEquipment *shipEquipment
+	ShipInfo      *shipInfo
 )
 
 func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	*Q = *Use(db, opts...)
+	Equipment = &Q.Equipment
+	ShipEquipment = &Q.ShipEquipment
 	ShipInfo = &Q.ShipInfo
 }
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
-		db:       db,
-		ShipInfo: newShipInfo(db, opts...),
+		db:            db,
+		Equipment:     newEquipment(db, opts...),
+		ShipEquipment: newShipEquipment(db, opts...),
+		ShipInfo:      newShipInfo(db, opts...),
 	}
 }
 
 type Query struct {
 	db *gorm.DB
 
-	ShipInfo shipInfo
+	Equipment     equipment
+	ShipEquipment shipEquipment
+	ShipInfo      shipInfo
 }
 
 func (q *Query) Available() bool { return q.db != nil }
 
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
-		db:       db,
-		ShipInfo: q.ShipInfo.clone(db),
+		db:            db,
+		Equipment:     q.Equipment.clone(db),
+		ShipEquipment: q.ShipEquipment.clone(db),
+		ShipInfo:      q.ShipInfo.clone(db),
 	}
 }
 
@@ -57,18 +67,24 @@ func (q *Query) WriteDB() *Query {
 
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
-		db:       db,
-		ShipInfo: q.ShipInfo.replaceDB(db),
+		db:            db,
+		Equipment:     q.Equipment.replaceDB(db),
+		ShipEquipment: q.ShipEquipment.replaceDB(db),
+		ShipInfo:      q.ShipInfo.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
-	ShipInfo *shipInfoDo
+	Equipment     *equipmentDo
+	ShipEquipment *shipEquipmentDo
+	ShipInfo      *shipInfoDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
-		ShipInfo: q.ShipInfo.WithContext(ctx),
+		Equipment:     q.Equipment.WithContext(ctx),
+		ShipEquipment: q.ShipEquipment.WithContext(ctx),
+		ShipInfo:      q.ShipInfo.WithContext(ctx),
 	}
 }
 
