@@ -5,6 +5,7 @@ go 1.23.5
 replace github.com/apache/thrift => github.com/apache/thrift v0.13.0
 
 require (
+	gitee.com/opengauss/openGauss-connector-go-pq v1.0.7
 	github.com/apache/thrift v0.22.0
 	github.com/cloudwego/hertz v0.10.3
 	gorm.io/driver/postgres v1.4.8
@@ -15,7 +16,6 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	gitee.com/opengauss/openGauss-connector-go-pq v1.0.7 // indirect
 	github.com/bytedance/gopkg v0.1.1 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
