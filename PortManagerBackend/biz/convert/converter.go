@@ -104,11 +104,6 @@ func APIToDBUpdateMap(req *api.Ship) map[string]interface{} {
 	}
 	if req.Rarity != "" {
 		updates["rarity"] = req.Rarity
-		// 如果没有明确指定星级，则根据稀有度自动计算
-		if req.Stars == nil {
-			stars := calculateStarsByRarity(req.Rarity)
-			updates["stars"] = stars
-		}
 	}
 	if req.Faction != "" {
 		updates["faction"] = req.Faction
@@ -116,7 +111,7 @@ func APIToDBUpdateMap(req *api.Ship) map[string]interface{} {
 	if req.Level != nil && *req.Level > 0 {
 		updates["level"] = *req.Level
 	}
-	// 支持独立更新星级
+	// 只有在明确传入 Stars 字段时才更新星级
 	if req.Stars != nil && *req.Stars > 0 {
 		updates["stars"] = *req.Stars
 	}

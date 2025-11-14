@@ -1,9 +1,14 @@
+//go:build opengauss
+
 package db
 
 import (
 	"fmt"
 	"log"
 
+	"database/sql"
+
+	_ "gitee.com/opengauss/openGauss-connector-go-pq"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
@@ -24,24 +29,42 @@ func Init() {
 		constants.PostgresTimeZone,
 	)
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	sqlDB, err := sql.Open("opengauss", dsn)
 	if err != nil {
-		log.Fatalf("[DB] Failed to connect to database: %v", err)
+		log.Fatalf("[DB] Failed to open database with official driver: %v", err)
+	}
+
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		Conn: sqlDB,
+	}), &gorm.Config{})
+
+	if err != nil {
+		log.Fatalf("[DB] Failed to initialize GORM with existing connection: %v", err)
 	}
 
 	query.SetDefault(db)
 
-	err = db.AutoMigrate(
-		&model.ShipInfo{},
-		&model.Equipment{},
-		&model.ShipEquipment{},
-	)
-	if err != nil {
-		log.Fatalf("[DB] Failed to auto migrate: %v", err)
-	}
-
 	// 初始化装备数据
-	initEquipments(db)
+	hasShipInfoTable := db.Migrator().HasTable(&model.ShipInfo{})
+
+	// 如果表不存在，才执行 AutoMigrate
+	if !hasShipInfoTable {
+		log.Println("[DB] Tables not found, starting auto migration...")
+		err = db.AutoMigrate(
+			&model.ShipInfo{},
+			&model.Equipment{},
+			&model.ShipEquipment{},
+		)
+		if err != nil {
+			log.Fatalf("[DB] Failed to auto migrate: %v", err)
+		}
+		log.Println("[DB] Auto migration completed.")
+
+		// 只有在第一次创建表之后，才需要初始化装备数据
+		initEquipments(db)
+	} else {
+		log.Println("[DB] Tables already exist, skipping migration.")
+	}
 
 	log.Println("[DB] Database connected and initialized successfully")
 }

@@ -2,7 +2,7 @@
 福州大学2025年下半学期数据库实践大作业 - 碧蓝航线港口管理系统
 
 ## 项目简介
-基于 Go + Vue3 + PostgreSQL 的碧蓝航线港口管理系统，模拟游戏中的港口管理功能，实现舰船信息管理、装备系统、星级管理等核心功能。
+基于 Go + Vue3 + **openGauss** 的碧蓝航线港口管理系统，模拟游戏中的港口管理功能，实现舰船信息管理、装备系统、星级管理等核心功能。
 
 ### 主要功能
 - 🚢 **舰船管理** - 舰船信息的增删改查，支持多条件筛选
@@ -17,16 +17,31 @@
 - 前后端分离架构
 - RESTful API 设计
 - GORM ORM + Code Generation
-- PostgreSQL 数据库
+- **云端 openGauss 数据库**，充分体验企业级数据库特性
 - Docker 容器化部署
 
 ## 技术栈
 - **后端**: Go 1.23 + Hertz (CloudWeGo) + GORM 1.24 + Gen 0.3.21
 - **前端**: Vue3 + Vite + Element Plus + Pinia + Axios
-- **数据库**: PostgreSQL 15 → **openGauss (华为云平台)** ⚠️ 待迁移
-- **容器化**: Docker + Docker Compose
+- **数据库（云端部署）**: **openGauss 5.0.1 （基于华为云ECS鲲鹏ARM架构手动部署）** 
+- **数据库（本地开发）**: PostgreSQL 15
+- **容器化**: Docker + Docker Compose （用于本地环境）
 
-> **⚠️ 重要提示**: 根据学校课程要求，本项目后续将迁移至华为云平台的 openGauss 数据库。当前使用 PostgreSQL 仅用于本地开发测试。
+## 核心挑战：手动部署并迁移至 openGauss
+作为本项目的核心实践内容，我们完成了从本地 PostgreSQL 到华为云 openGauss 的完整迁移。这不仅仅是更换一个连接字符串，而是一次涉及底层架构、网络安全、驱动兼容性的深度实践。
+
+### 迁移过程与挑战：
+1.  **环境搭建**: 在华为云 ECS (鲲鹏 ARM 架构) 上，从零开始手动编译安装 openGauss 5.0.1 数据库，而非使用便捷的云数据库服务，以此深入理解数据库的部署与运维。
+2.  **网络攻坚**: 配置并排查了云服务器的**安全组**规则，解决了从本地开发环境到云端数据库的网络连接超时问题。
+3.  **权限配置**: 深入学习并修改了 openGauss 的核心认证文件 `pg_hba.conf`，从 `trust` 到 `md5` 再到最终的 `sha256`，理解了不同认证方式的安全性与适用场景。
+4.  **驱动适配**: 遭遇了标准 Go PostgreSQL 驱动与 openGauss `sha256` 认证协议的兼容性难题，表现为 `received unexpected message`、`empty password` 等多种深层错误。最终通过查阅官方资料，找到了并成功集成了 openGauss 官方 Go 驱动 **`openGauss-connector-go-pq`**，完美解决了兼容性问题。
+5.  **权限管理**: 在连接成功后，进一步解决了 GORM `AutoMigrate` 因数据库用户权限不足导致的 `permission denied for schema public` 问题，通过 `GRANT` 语句为应用用户授予了必要的 schema 权限。
+
+这次迁移是一次宝贵的实战经历，它让我们深刻体会到企业级数据库在安全性、认证协议上的严谨性，以及在异构环境中解决复杂兼容性问题的重要性。
+
+参考资料：
+
+[pq - A pure Go openGauss driver for Go's database/sql package](https://pkg.go.dev/gitee.com/opengauss/openGauss-connector-go-pq)
 
 ## 数据库设计
 
@@ -163,40 +178,85 @@ FOREIGN KEY (equipment_id) REFERENCES equipments(id) ON DELETE RESTRICT
 
 ## 快速开始
 
-### 1. 启动数据库
-```powershell
-docker-compose up -d
-```
+本项目采用 **Go 构建标签 (Build Tags)** 实现云端与本地环境的无缝切换，无需修改数据库初始化代码，只需在启动时添加一个参数即可。
 
-### 2. 启动后端
-```powershell
-cd PortManagerBackend
-go run .
-```
-首次启动会自动：
-- 创建数据库表结构
-- 初始化277种装备数据
+### 模式一：连接云端 openGauss 数据库 (最终部署方案)
 
-### 3. 启动前端
-```powershell
-cd PortManagerFrontend
-npm install
-npm run dev
-```
+这是本项目的最终形态，应用后端连接到部署在华为云 ECS 上的 openGauss 数据库。
 
-### 4. 访问系统
-浏览器打开 `http://localhost:5173`
+1.  **配置连接信息**
+    *   打开 `PortManagerBackend/pkg/constants/constants.go` 文件，将其中的数据库连接信息修改为您的**云端 openGauss 配置**。
 
-## 数据库配置
+2.  **启动后端服务 (openGauss 模式)**
+    *   执行以下命令启动后端。`-tags opengauss` 会告诉 Go 编译器选择使用 openGauss 专用驱动。
+    ```powershell
+    cd PortManagerBackend
+    go run -tags opengauss .
+    ```
+    首次启动会自动在云端数据库中创建表结构并初始化数据。
+
+3.  **启动前端服务**
+    ```powershell
+    cd PortManagerFrontend
+    npm install
+    npm run dev
+    ```
+
+### 模式二：使用 Docker 启动本地 PostgreSQL (用于开发测试)
+
+如果您需要在本地进行快速开发和测试，可以使用 Docker Compose 一键启动 PostgreSQL 数据库。
+
+1.  **配置连接信息**
+    *   打开 `PortManagerBackend/pkg/constants/constants.go` 文件，将其中的数据库连接信息修改为**本地 PostgreSQL 配置**。
+
+2.  **启动本地数据库**
+    ```powershell
+    docker-compose up -d
+    ```
+
+3.  **启动后端服务 (PostgreSQL 模式)**
+    *   执行以下命令启动后端。`-tags postgres` 会告诉 Go 编译器选择使用标准的 PostgreSQL 驱动。
+    ```powershell
+    cd PortManagerBackend
+    go run -tags postgres .
+    ```
+
+4.  **启动前端服务**
+    ```powershell
+    cd PortManagerFrontend
+    npm install
+    npm run dev
+    ```
+
+### 数据库配置
+
 配置文件位于 `PortManagerBackend/pkg/constants/constants.go`
 
-默认配置：
+#### 云端部署 (openGauss) 配置示例
 ```go
-PostgresHost     = "localhost"
-PostgresPort     = 5432
-PostgresUser     = "commander"
-PostgresPassword = "mysecretpassword"
-PostgresDBName   = "al_port_db"
+const (
+	PostgresHost     = "your-ip"    // 华为云 ECS 公网 IP
+	PostgresPort     = 26000
+	PostgresUser     = "shaddocknh3"     // 数据库使用者
+	PostgresPassword = "shenmidazhi"    // 数据库密码
+	PostgresDBName   = "al_port_manager" // 数据库名
+	PostgresSSLMode  = "disable"
+	PostgresTimeZone = "Asia/Shanghai"
+)
+```
+
+#### 本地开发 (PostgreSQL) 配置示例
+
+```go
+const (
+	PostgresHost     = "localhost"
+	PostgresPort     = 5432
+	PostgresUser     = "commander"
+	PostgresPassword = "mysecretpassword"
+	PostgresDBName   = "al_port_db"
+	PostgresSSLMode  = "disable"
+	PostgresTimeZone = "Asia/Shanghai"
+)
 ```
 
 ## API 接口
@@ -233,22 +293,8 @@ PostgresDBName   = "al_port_db"
 }
 ```
 
-## 未来计划
-
-### 迁移至 openGauss
-> **学校课程要求**：本项目将迁移至华为云 openGauss 数据库
-
-openGauss 是华为开源的企业级关系型数据库，基于 PostgreSQL 开发，兼容 PostgreSQL 协议。迁移工作包括：
-- 修改数据库驱动配置
-- 测试 GORM 兼容性
-- 性能对比测试
-
-参考资源：
-- [openGauss 官方文档](https://docs.opengauss.org/)
-- [华为云 GaussDB](https://www.huaweicloud.com/product/gaussdb.html)
-
 ## 许可证
-MIT License
+[MIT License](LICENSE)
 
 ## 作者
 [ShaddockNH3](https://github.com/ShaddockNH3)

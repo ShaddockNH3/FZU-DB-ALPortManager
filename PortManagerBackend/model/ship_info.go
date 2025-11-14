@@ -14,9 +14,9 @@ type ShipInfo struct {
 	Rarity   string `gorm:"size:64"`
 	ShipType string `gorm:"size:64;index"`
 	Faction  string `gorm:"size:64;index"`
-	Level    int    `gorm:"default:1"`
+	Level    int    `gorm:""`
 
-	Stars int `gorm:"default:1"` // 当前星级，满星后可装备兵装
+	Stars int `gorm:""` // 当前星级，满星后可装备兵装
 
 	Equipments []ShipEquipment `gorm:"foreignKey:ShipID;references:ID"`
 }
