@@ -12,11 +12,9 @@ import (
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
+// sendError 统一走 errors.go 里的状态码映射（本文件由 hz 生成，改动保持在最小范围）。
 func sendError(c *app.RequestContext, err error) {
-	c.JSON(consts.StatusInternalServerError, &api.BaseResp{
-		Code: 500,
-		Msg:  err.Error(),
-	})
+	mapError(c, err)
 }
 
 func sendSuccess(c *app.RequestContext, msg string) {
@@ -57,7 +55,7 @@ func GetShipByID(ctx context.Context, c *app.RequestContext) {
 
 	resp, err := service.NewShipService(ctx).GetShipByID(req.ID)
 	if err != nil {
-		c.JSON(consts.StatusNotFound, &api.BaseResp{Code: 404, Msg: "指挥官，没有找到这艘船喵..."})
+		sendError(c, err)
 		return
 	}
 

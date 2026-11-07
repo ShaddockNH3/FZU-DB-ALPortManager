@@ -1,13 +1,21 @@
 package service
 
 import (
+	"context"
+	"errors"
+	"sort"
+
 	"FZU-DB-ALPortManager/biz/convert"
+	"FZU-DB-ALPortManager/biz/domain/ship"
 	"FZU-DB-ALPortManager/biz/model/api"
 	"FZU-DB-ALPortManager/model"
 	"FZU-DB-ALPortManager/query"
-	"context"
+
+	"gorm.io/gorm"
 )
 
+// ShipService 是用例层：只做"取数据 → 过一遍领域规则 → 存回去"，
+// 装备槽能不能装、星级几颗这些判断都在 biz/domain/ship。
 type ShipService struct {
 	ctx context.Context
 }
@@ -22,8 +30,7 @@ func (s *ShipService) CreateShip(req *api.Ship) (*api.Ship, error) {
 		return nil, err
 	}
 
-	// 只创建舰船本体，不创建空的装备栏记录
-	// 装备栏记录会在装备时按需创建
+	// 只创建舰船本体，装备槽记录在装备时按需创建
 	if err := query.ShipInfo.WithContext(s.ctx).Create(dbModel); err != nil {
 		return nil, err
 	}
@@ -34,11 +41,13 @@ func (s *ShipService) CreateShip(req *api.Ship) (*api.Ship, error) {
 func (s *ShipService) GetShipByID(id int64) (*api.Ship, error) {
 	q := query.ShipInfo
 	dbModel, err := q.WithContext(s.ctx).
-		Preload(q.Equipments.Equipment). // 这个 Preload 魔法是对的！
+		Preload(q.Equipments.Equipment).
 		Where(q.ID.Eq(uint(id))).
 		First()
-
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ship.ErrShipNotFound
+		}
 		return nil, err
 	}
 	return convert.DBToAPIModel(dbModel), nil
@@ -47,7 +56,6 @@ func (s *ShipService) GetShipByID(id int64) (*api.Ship, error) {
 func (s *ShipService) GetShipList(req *api.GetShipListReq) (*api.GetShipListResp, error) {
 	q := query.ShipInfo.WithContext(s.ctx)
 
-	// 筛选条�?
 	if req.ShipName != nil && *req.ShipName != "" {
 		q = q.Where(query.ShipInfo.ShipName.Like("%" + *req.ShipName + "%"))
 	}
@@ -63,28 +71,39 @@ func (s *ShipService) GetShipList(req *api.GetShipListReq) (*api.GetShipListResp
 
 	q = q.Preload(query.ShipInfo.Equipments.Equipment)
 
-	page := int(req.GetPage())
-	pageSize := int(req.GetPageSize())
-	offset := (page - 1) * pageSize
-	total, _ := q.Count()
-	dbList, _ := q.Offset(offset).Limit(pageSize).Order(query.ShipInfo.ID.Desc()).Find()
+	paging := ship.NormalizePaging(int(req.GetPage()), int(req.GetPageSize()))
+
+	total, err := q.Count()
+	if err != nil {
+		return nil, err
+	}
+
+	dbList, err := q.Offset(paging.Offset).Limit(paging.PageSize).Order(query.ShipInfo.ID.Desc()).Find()
+	if err != nil {
+		return nil, err
+	}
 
 	return &api.GetShipListResp{
 		Total:    total,
 		Ships:    convert.DBToAPIModelList(dbList),
-		Page:     int32(page),
-		PageSize: int32(pageSize),
+		Page:     int32(paging.Page),
+		PageSize: int32(paging.PageSize),
 	}, nil
 }
 
 func (s *ShipService) UpdateShip(id int64, req *api.Ship) (*api.Ship, error) {
-	if _, err := query.ShipInfo.WithContext(s.ctx).Where(query.ShipInfo.ID.Eq(uint(id))).First(); err != nil {
+	if _, err := s.GetShipByID(id); err != nil {
 		return nil, err
 	}
 
-	updatesMap := convert.APIToDBUpdateMap(req)
+	updates := convert.APIToDBUpdateMap(req)
+	if len(updates) == 0 {
+		return s.GetShipByID(id)
+	}
 
-	if _, err := query.ShipInfo.WithContext(s.ctx).Where(query.ShipInfo.ID.Eq(uint(id))).Updates(updatesMap); err != nil {
+	if _, err := query.ShipInfo.WithContext(s.ctx).
+		Where(query.ShipInfo.ID.Eq(uint(id))).
+		Updates(updates); err != nil {
 		return nil, err
 	}
 
@@ -93,82 +112,65 @@ func (s *ShipService) UpdateShip(id int64, req *api.Ship) (*api.Ship, error) {
 
 func (s *ShipService) DeleteShip(id int64) error {
 	shipID := uint(id)
+
 	return query.Q.Transaction(func(tx *query.Query) error {
-		if _, err := tx.ShipEquipment.WithContext(s.ctx).Where(query.ShipEquipment.ShipID.Eq(shipID)).Delete(); err != nil {
+		if _, err := tx.ShipEquipment.WithContext(s.ctx).
+			Where(query.ShipEquipment.ShipID.Eq(shipID)).
+			Delete(); err != nil {
 			return err
 		}
-		if _, err := tx.ShipInfo.WithContext(s.ctx).Where(query.ShipInfo.ID.Eq(shipID)).Delete(); err != nil {
+
+		result, err := tx.ShipInfo.WithContext(s.ctx).
+			Where(query.ShipInfo.ID.Eq(shipID)).
+			Delete()
+		if err != nil {
 			return err
+		}
+		if result.RowsAffected == 0 {
+			return ship.ErrShipNotFound
 		}
 		return nil
 	})
 }
 
 func (s *ShipService) GetStatistics() (*api.GetStatisticsResp, error) {
-	q := query.ShipInfo.WithContext(s.ctx)
-
-	// 统计总数
-	total, err := q.Count()
+	ships, err := query.ShipInfo.WithContext(s.ctx).Find()
 	if err != nil {
 		return nil, err
-	}
-
-	// 获取所有舰�?
-	ships, err := q.Find()
-	if err != nil {
-		return nil, err
-	}
-
-	// 统计阵营
-	factionMap := make(map[string]int64)
-	rarityMap := make(map[string]int64)
-	shipTypeMap := make(map[string]int64)
-
-	for _, ship := range ships {
-		factionMap[ship.Faction]++
-		rarityMap[ship.Rarity]++
-		shipTypeMap[ship.ShipType]++
-	}
-
-	// 转换为StatItem数组
-	factionStats := make([]*api.StatItem, 0, len(factionMap))
-	for name, count := range factionMap {
-		factionStats = append(factionStats, &api.StatItem{
-			Name:  name,
-			Count: count,
-		})
-	}
-
-	rarityStats := make([]*api.StatItem, 0, len(rarityMap))
-	for name, count := range rarityMap {
-		rarityStats = append(rarityStats, &api.StatItem{
-			Name:  name,
-			Count: count,
-		})
-	}
-
-	shipTypeStats := make([]*api.StatItem, 0, len(shipTypeMap))
-	for name, count := range shipTypeMap {
-		shipTypeStats = append(shipTypeStats, &api.StatItem{
-			Name:  name,
-			Count: count,
-		})
 	}
 
 	return &api.GetStatisticsResp{
-		TotalShips:    total,
-		FactionStats:  factionStats,
-		RarityStats:   rarityStats,
-		ShipTypeStats: shipTypeStats,
+		TotalShips:    int64(len(ships)),
+		FactionStats:  countBy(ships, func(m *model.ShipInfo) string { return m.Faction }),
+		RarityStats:   countBy(ships, func(m *model.ShipInfo) string { return m.Rarity }),
+		ShipTypeStats: countBy(ships, func(m *model.ShipInfo) string { return m.ShipType }),
 	}, nil
 }
 
+// EquipShip 装/卸装备。
+//
+// 装之前先过三道规则：槽位是否合法、装备类型是否匹配舰种、兵装槽是否已满星。
+// 原来这些判断一个都没有，前端传什么就存什么。
 func (s *ShipService) EquipShip(req *api.EquipShipReq) (*api.Ship, error) {
 	shipID := uint(req.ShipId)
 	slotIndex := int(req.SlotIndex)
 	equipmentID := uint(req.GetEquipmentId())
 
-	// 如果equipmentID�?，表示卸下装备，删除记录
+	if !ship.IsValidSlot(slotIndex) {
+		return nil, ship.ErrSlotOutOfRange
+	}
+
+	dbShip, err := query.ShipInfo.WithContext(s.ctx).
+		Where(query.ShipInfo.ID.Eq(shipID)).
+		First()
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ship.ErrShipNotFound
+		}
+		return nil, err
+	}
+
+	// equipmentID 为 0 表示卸下这一格
 	if equipmentID == 0 {
 		_, err := query.ShipEquipment.WithContext(s.ctx).
 			Where(query.ShipEquipment.ShipID.Eq(shipID)).
@@ -180,43 +182,74 @@ func (s *ShipService) EquipShip(req *api.EquipShipReq) (*api.Ship, error) {
 		return s.GetShipByID(req.ShipId)
 	}
 
-	// 检查该装备栏是否存�?
+	if err := s.checkSlotRules(dbShip, slotIndex, equipmentID); err != nil {
+		return nil, err
+	}
+
+	if err := s.upsertEquipment(shipID, slotIndex, equipmentID); err != nil {
+		return nil, err
+	}
+
+	return s.GetShipByID(req.ShipId)
+}
+
+func (s *ShipService) checkSlotRules(dbShip *model.ShipInfo, slotIndex int, equipmentID uint) error {
+	equipment, err := query.Equipment.WithContext(s.ctx).
+		Where(query.Equipment.ID.Eq(equipmentID)).
+		First()
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ship.ErrEquipmentNotFound
+		}
+		return err
+	}
+
+	equipmentType, err := ship.ParseEquipmentType(equipment.Type)
+	if err != nil {
+		return err
+	}
+
+	if !ship.SlotAccepts(dbShip.ShipType, slotIndex, equipmentType) {
+		return ship.ErrEquipmentTypeNotAllowed
+	}
+
+	if slotIndex == ship.AugmentSlotIndex && !ship.CanEquipAugment(dbShip.Rarity, dbShip.Stars) {
+		return ship.ErrAugmentLocked
+	}
+
+	return nil
+}
+
+func (s *ShipService) upsertEquipment(shipID uint, slotIndex int, equipmentID uint) error {
 	_, err := query.ShipEquipment.WithContext(s.ctx).
 		Where(query.ShipEquipment.ShipID.Eq(shipID)).
 		Where(query.ShipEquipment.SlotIndex.Eq(slotIndex)).
 		First()
 
-	if err == nil {
-		// 记录存在，更新装备ID
+	switch {
+	case err == nil:
 		_, err = query.ShipEquipment.WithContext(s.ctx).
 			Where(query.ShipEquipment.ShipID.Eq(shipID)).
 			Where(query.ShipEquipment.SlotIndex.Eq(slotIndex)).
 			Update(query.ShipEquipment.EquipmentID, equipmentID)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// 记录不存在，创建新记�?
-		err = query.ShipEquipment.WithContext(s.ctx).Create(&model.ShipEquipment{
+		return err
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		return query.ShipEquipment.WithContext(s.ctx).Create(&model.ShipEquipment{
 			ShipID:      shipID,
 			SlotIndex:   slotIndex,
 			EquipmentID: equipmentID,
 		})
-		if err != nil {
-			return nil, err
-		}
+	default:
+		return err
 	}
-
-	return s.GetShipByID(req.ShipId)
 }
 
 func (s *ShipService) GetEquipmentList(req *api.GetEquipmentListReq) (*api.GetEquipmentListResp, error) {
 	q := query.Equipment.WithContext(s.ctx)
 
 	if req.Type != nil {
-		typeStr := equipmentTypeToString(*req.Type)
-		if typeStr != "" {
-			q = q.Where(query.Equipment.Type.Eq(typeStr))
+		if typeName, err := ship.EquipmentTypeName(*req.Type); err == nil {
+			q = q.Where(query.Equipment.Type.Eq(typeName))
 		}
 	}
 
@@ -225,80 +258,38 @@ func (s *ShipService) GetEquipmentList(req *api.GetEquipmentListReq) (*api.GetEq
 		return nil, err
 	}
 
-	equipments := make([]*api.Equipment, len(dbList))
-	for i, e := range dbList {
-		equipments[i] = &api.Equipment{
-			ID:   int64(e.ID),
-			Name: e.Name,
-			Type: stringToEquipmentTypeAPI(e.Type),
+	equipments := make([]*api.Equipment, 0, len(dbList))
+	for _, item := range dbList {
+		equipmentType, err := ship.ParseEquipmentType(item.Type)
+		if err != nil {
+			continue
 		}
+		equipments = append(equipments, &api.Equipment{
+			ID:   int64(item.ID),
+			Name: item.Name,
+			Type: equipmentType,
+		})
 	}
 
-	return &api.GetEquipmentListResp{
-		Equipments: equipments,
-	}, nil
+	return &api.GetEquipmentListResp{Equipments: equipments}, nil
 }
 
-// 辅助函数：将API的EquipmentType转换为数据库的字符串
-func equipmentTypeToString(t api.EquipmentType) string {
-	switch t {
-	case api.EquipmentType_SMALL_CALIBER_MAIN_GUN:
-		return "SMALL_CALIBER_MAIN_GUN"
-	case api.EquipmentType_MEDIUM_CALIBER_MAIN_GUN:
-		return "MEDIUM_CALIBER_MAIN_GUN"
-	case api.EquipmentType_LARGE_CALIBER_MAIN_GUN:
-		return "LARGE_CALIBER_MAIN_GUN"
-	case api.EquipmentType_BATTLESHIP_MAIN_GUN:
-		return "BATTLESHIP_MAIN_GUN"
-	case api.EquipmentType_TORPEDO:
-		return "TORPEDO"
-	case api.EquipmentType_SUBMARINE_TORPEDO:
-		return "SUBMARINE_TORPEDO"
-	case api.EquipmentType_ANTI_AIR_GUN:
-		return "ANTI_AIR_GUN"
-	case api.EquipmentType_AUXILIARY:
-		return "AUXILIARY"
-	case api.EquipmentType_DIVE_BOMBER:
-		return "DIVE_BOMBER"
-	case api.EquipmentType_TORPEDO_BOMBER:
-		return "TORPEDO_BOMBER"
-	case api.EquipmentType_FIGHTER:
-		return "FIGHTER"
-	case api.EquipmentType_AUGMENT:
-		return "AUGMENT"
-	default:
-		return ""
+// countBy 按某个字段分组计数，按数量倒序、同数量按名称升序，界面不会每次刷新换顺序。
+func countBy(ships []*model.ShipInfo, pick func(*model.ShipInfo) string) []*api.StatItem {
+	counts := make(map[string]int64, len(ships))
+	for _, item := range ships {
+		counts[pick(item)]++
 	}
-}
 
-// 辅助函数：将数据库的字符串转换为API的EquipmentType
-func stringToEquipmentTypeAPI(typeStr string) api.EquipmentType {
-	switch typeStr {
-	case "SMALL_CALIBER_MAIN_GUN":
-		return api.EquipmentType_SMALL_CALIBER_MAIN_GUN
-	case "MEDIUM_CALIBER_MAIN_GUN":
-		return api.EquipmentType_MEDIUM_CALIBER_MAIN_GUN
-	case "LARGE_CALIBER_MAIN_GUN":
-		return api.EquipmentType_LARGE_CALIBER_MAIN_GUN
-	case "BATTLESHIP_MAIN_GUN":
-		return api.EquipmentType_BATTLESHIP_MAIN_GUN
-	case "TORPEDO":
-		return api.EquipmentType_TORPEDO
-	case "SUBMARINE_TORPEDO":
-		return api.EquipmentType_SUBMARINE_TORPEDO
-	case "ANTI_AIR_GUN":
-		return api.EquipmentType_ANTI_AIR_GUN
-	case "AUXILIARY":
-		return api.EquipmentType_AUXILIARY
-	case "DIVE_BOMBER":
-		return api.EquipmentType_DIVE_BOMBER
-	case "TORPEDO_BOMBER":
-		return api.EquipmentType_TORPEDO_BOMBER
-	case "FIGHTER":
-		return api.EquipmentType_FIGHTER
-	case "AUGMENT":
-		return api.EquipmentType_AUGMENT
-	default:
-		return api.EquipmentType(0)
+	stats := make([]*api.StatItem, 0, len(counts))
+	for name, count := range counts {
+		stats = append(stats, &api.StatItem{Name: name, Count: count})
 	}
+	sort.Slice(stats, func(i, j int) bool {
+		if stats[i].Count != stats[j].Count {
+			return stats[i].Count > stats[j].Count
+		}
+		return stats[i].Name < stats[j].Name
+	})
+	return stats
 }

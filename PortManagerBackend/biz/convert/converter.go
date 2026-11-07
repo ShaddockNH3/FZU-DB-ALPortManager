@@ -1,11 +1,16 @@
 package convert
 
 import (
+	"FZU-DB-ALPortManager/biz/domain/ship"
 	"FZU-DB-ALPortManager/biz/model/api"
 	"FZU-DB-ALPortManager/model"
-	"errors"
+	"strings"
 )
 
+// 装备类型字符串 ↔ 枚举、槽位规则、星级规则都搬到了 biz/domain/ship，
+// 这里只做"数据库行 ↔ API 结构"的形状转换。
+
+// DBToAPIModel 把一行舰船（含预加载的装备）转成接口结构。
 func DBToAPIModel(m *model.ShipInfo) *api.Ship {
 	if m == nil {
 		return nil
@@ -16,58 +21,62 @@ func DBToAPIModel(m *model.ShipInfo) *api.Ship {
 	stars := int32(m.Stars)
 	createdAt := m.CreatedAt.Format("2006-01-02 15:04:05")
 	updatedAt := m.UpdatedAt.Format("2006-01-02 15:04:05")
-	shipAPI := &api.Ship{
-		ID:        &id,
-		ShipName:  m.ShipName,
-		Rarity:    m.Rarity,
-		ShipType:  m.ShipType,
-		Faction:   m.Faction,
-		Level:     &level,
-		Stars:     &stars,
-		CreatedAt: &createdAt,
-		UpdatedAt: &updatedAt,
+
+	slots, augmentSlot := buildSlots(m)
+
+	return &api.Ship{
+		ID:             &id,
+		ShipName:       m.ShipName,
+		Rarity:         m.Rarity,
+		ShipType:       m.ShipType,
+		Faction:        m.Faction,
+		Level:          &level,
+		Stars:          &stars,
+		CreatedAt:      &createdAt,
+		UpdatedAt:      &updatedAt,
+		EquipmentSlots: slots,
+		AugmentSlot:    augmentSlot,
 	}
-
-	if m.Equipments != nil {
-		acceptableTypesMap := getAcceptableTypesByShipType(m.ShipType)
-		shipAPI.EquipmentSlots = make([]*api.EquipmentSlot, 5)
-		for i := 0; i < 5; i++ {
-			shipAPI.EquipmentSlots[i] = &api.EquipmentSlot{
-				AcceptableTypes: acceptableTypesMap[i],
-			}
-		}
-		shipAPI.AugmentSlot = &api.EquipmentSlot{
-			AcceptableTypes: []api.EquipmentType{api.EquipmentType_AUGMENT},
-		}
-
-		for _, dbEquipSlot := range m.Equipments {
-			if dbEquipSlot.EquipmentID == 0 || dbEquipSlot.Equipment.ID == 0 {
-				continue
-			}
-
-			apiEquipType := stringToEquipmentType(dbEquipSlot.Equipment.Type)
-			// 检查类型字符串是否为空（表示未知类型），而不是检查枚举值
-			if dbEquipSlot.Equipment.Type == "" {
-				continue // 如果类型为空，就跳过这个装备
-			}
-
-			apiEquip := &api.Equipment{
-				ID:   int64(dbEquipSlot.Equipment.ID),
-				Name: dbEquipSlot.Equipment.Name,
-				Type: api.EquipmentType(apiEquipType),
-			}
-
-			if dbEquipSlot.SlotIndex < 5 {
-				shipAPI.EquipmentSlots[dbEquipSlot.SlotIndex].EquippedItem = apiEquip
-			} else if dbEquipSlot.SlotIndex == 5 {
-				shipAPI.AugmentSlot.EquippedItem = apiEquip
-			}
-		}
-	}
-
-	return shipAPI
 }
 
+// buildSlots 把已装装备填进 5 个普通槽和 1 个兵装槽。
+// 槽位列表总是齐的，未知装备类型直接跳过，不往接口里塞空对象。
+func buildSlots(m *model.ShipInfo) ([]*api.EquipmentSlot, *api.EquipmentSlot) {
+	acceptable := ship.AcceptableTypes(m.ShipType)
+
+	slots := make([]*api.EquipmentSlot, ship.EquipmentSlotCount)
+	for index := range slots {
+		slots[index] = &api.EquipmentSlot{AcceptableTypes: acceptable[index]}
+	}
+	augmentSlot := &api.EquipmentSlot{AcceptableTypes: []api.EquipmentType{api.EquipmentType_AUGMENT}}
+
+	for _, equipped := range m.Equipments {
+		if equipped.EquipmentID == 0 || equipped.Equipment.ID == 0 {
+			continue
+		}
+		equipmentType, err := ship.ParseEquipmentType(equipped.Equipment.Type)
+		if err != nil {
+			continue
+		}
+
+		item := &api.Equipment{
+			ID:   int64(equipped.Equipment.ID),
+			Name: equipped.Equipment.Name,
+			Type: equipmentType,
+		}
+
+		switch {
+		case equipped.SlotIndex >= 0 && equipped.SlotIndex < ship.EquipmentSlotCount:
+			slots[equipped.SlotIndex].EquippedItem = item
+		case equipped.SlotIndex == ship.AugmentSlotIndex:
+			augmentSlot.EquippedItem = item
+		}
+	}
+
+	return slots, augmentSlot
+}
+
+// DBToAPIModelList 批量转换。
 func DBToAPIModelList(dbList []*model.ShipInfo) []*api.Ship {
 	apiList := make([]*api.Ship, len(dbList))
 	for i, m := range dbList {
@@ -76,31 +85,31 @@ func DBToAPIModelList(dbList []*model.ShipInfo) []*api.Ship {
 	return apiList
 }
 
+// APIToDBCreateModel 新建舰船：等级固定 1 级，星级按稀有度给，不预先建装备槽。
 func APIToDBCreateModel(req *api.Ship) (*model.ShipInfo, error) {
 	if req == nil {
-		return nil, errors.New("请求不能为空")
+		return nil, ship.ErrEmptyShipName
+	}
+	name := strings.TrimSpace(req.ShipName)
+	if name == "" {
+		return nil, ship.ErrEmptyShipName
 	}
 
-	stars := calculateInitialStarsByRarity(req.Rarity)
-	dbModel := &model.ShipInfo{
-		ShipName: req.ShipName,
+	return &model.ShipInfo{
+		ShipName: name,
 		Rarity:   req.Rarity,
 		ShipType: req.ShipType,
 		Faction:  req.Faction,
-		Level:    1, // 新船都是1级
-		Stars:    stars,
-	}
-
-	// 不初始化装备栏，避免 GORM 自动保存 equipment_id=0 的记录
-	// 装备栏会在装备时按需创建
-
-	return dbModel, nil
+		Level:    1,
+		Stars:    ship.InitialStars(req.Rarity),
+	}, nil
 }
 
+// APIToDBUpdateMap 只更新明确传了值的字段，空字符串视为"不改"。
 func APIToDBUpdateMap(req *api.Ship) map[string]interface{} {
 	updates := make(map[string]interface{})
-	if req.ShipName != "" {
-		updates["ship_name"] = req.ShipName
+	if name := strings.TrimSpace(req.ShipName); name != "" {
+		updates["ship_name"] = name
 	}
 	if req.Rarity != "" {
 		updates["rarity"] = req.Rarity
@@ -111,144 +120,8 @@ func APIToDBUpdateMap(req *api.Ship) map[string]interface{} {
 	if req.Level != nil && *req.Level > 0 {
 		updates["level"] = *req.Level
 	}
-	// 只有在明确传入 Stars 字段时才更新星级
 	if req.Stars != nil && *req.Stars > 0 {
 		updates["stars"] = *req.Stars
 	}
 	return updates
-}
-
-// calculateInitialStarsByRarity 根据稀有度计算初始星级
-func calculateInitialStarsByRarity(rarity string) int {
-	switch rarity {
-	case "普通":
-		return 1
-	case "稀有", "精锐":
-		return 2
-	case "超稀有", "海上传奇", "最高方案", "决战方案":
-		return 3
-	default:
-		return 1
-	}
-}
-
-// calculateStarsByRarity 根据稀有度计算最大星级
-func calculateStarsByRarity(rarity string) int {
-	switch rarity {
-	case "普通":
-		return 4
-	case "稀有", "精锐":
-		return 5
-	case "超稀有", "海上传奇", "最高方案", "决战方案":
-		return 6
-	default:
-		return 3
-	}
-}
-
-func stringToEquipmentType(typeStr string) api.EquipmentType {
-	switch typeStr {
-	case "SMALL_CALIBER_MAIN_GUN":
-		return api.EquipmentType_SMALL_CALIBER_MAIN_GUN
-	case "MEDIUM_CALIBER_MAIN_GUN":
-		return api.EquipmentType_MEDIUM_CALIBER_MAIN_GUN
-	case "LARGE_CALIBER_MAIN_GUN":
-		return api.EquipmentType_LARGE_CALIBER_MAIN_GUN
-	case "BATTLESHIP_MAIN_GUN":
-		return api.EquipmentType_BATTLESHIP_MAIN_GUN
-	case "TORPEDO":
-		return api.EquipmentType_TORPEDO
-	case "SUBMARINE_TORPEDO":
-		return api.EquipmentType_SUBMARINE_TORPEDO
-	case "ANTI_AIR_GUN":
-		return api.EquipmentType_ANTI_AIR_GUN
-	case "AUXILIARY":
-		return api.EquipmentType_AUXILIARY
-	case "FIGHTER":
-		return api.EquipmentType_FIGHTER
-	case "DIVE_BOMBER":
-		return api.EquipmentType_DIVE_BOMBER
-	case "TORPEDO_BOMBER":
-		return api.EquipmentType_TORPEDO_BOMBER
-	case "AUGMENT":
-		return api.EquipmentType_AUGMENT
-	default:
-		return api.EquipmentType(0) // Return zero value for unknown types
-	}
-}
-
-func getAcceptableTypesByShipType(shipType string) map[int][]api.EquipmentType {
-	var (
-		auxiliaryX2 = []api.EquipmentType{api.EquipmentType_AUXILIARY}
-		antiAirGun  = []api.EquipmentType{api.EquipmentType_ANTI_AIR_GUN}
-	)
-
-	// 舰种：驱逐/轻巡/重巡/战列/战巡/航母/轻航/潜艇/维修
-	switch shipType {
-	case "驱逐":
-		return map[int][]api.EquipmentType{
-			0: {api.EquipmentType_SMALL_CALIBER_MAIN_GUN}, // 驱逐主炮
-			1: {api.EquipmentType_TORPEDO},                // 鱼雷
-			2: antiAirGun,                                 // 防空炮
-			3: auxiliaryX2,                                // 设备1
-			4: auxiliaryX2,                                // 设备2
-		}
-	case "轻巡":
-		return map[int][]api.EquipmentType{
-			0: {api.EquipmentType_SMALL_CALIBER_MAIN_GUN, api.EquipmentType_MEDIUM_CALIBER_MAIN_GUN}, // 轻巡主炮
-			1: {api.EquipmentType_TORPEDO, api.EquipmentType_SMALL_CALIBER_MAIN_GUN},                 // 副炮/鱼雷
-			2: antiAirGun,
-			3: auxiliaryX2,
-			4: auxiliaryX2,
-		}
-	case "重巡":
-		return map[int][]api.EquipmentType{
-			0: {api.EquipmentType_MEDIUM_CALIBER_MAIN_GUN, api.EquipmentType_LARGE_CALIBER_MAIN_GUN},                            // 重巡主炮
-			1: {api.EquipmentType_TORPEDO, api.EquipmentType_SMALL_CALIBER_MAIN_GUN, api.EquipmentType_MEDIUM_CALIBER_MAIN_GUN}, // 副炮/鱼雷
-			2: antiAirGun,
-			3: auxiliaryX2,
-			4: auxiliaryX2,
-		}
-	case "战列", "战巡":
-		return map[int][]api.EquipmentType{
-			0: {api.EquipmentType_BATTLESHIP_MAIN_GUN},                                                                                         // 战列主炮
-			1: {api.EquipmentType_SMALL_CALIBER_MAIN_GUN, api.EquipmentType_MEDIUM_CALIBER_MAIN_GUN, api.EquipmentType_LARGE_CALIBER_MAIN_GUN}, // 副炮
-			2: antiAirGun,
-			3: auxiliaryX2,
-			4: auxiliaryX2,
-		}
-	case "航母":
-		return map[int][]api.EquipmentType{
-			0: {api.EquipmentType_FIGHTER},        // 战斗机
-			1: {api.EquipmentType_DIVE_BOMBER},    // 轰炸机
-			2: {api.EquipmentType_TORPEDO_BOMBER}, // 鱼雷机
-			3: auxiliaryX2,
-			4: auxiliaryX2,
-		}
-	case "轻航":
-		return map[int][]api.EquipmentType{
-			0: {api.EquipmentType_FIGHTER, api.EquipmentType_DIVE_BOMBER}, // 飞机1
-			1: {api.EquipmentType_TORPEDO_BOMBER},                         // 飞机2 (通常是鱼雷机)
-			2: antiAirGun,
-			3: auxiliaryX2,
-			4: auxiliaryX2,
-		}
-	case "潜艇":
-		return map[int][]api.EquipmentType{
-			0: {api.EquipmentType_SUBMARINE_TORPEDO},      // 潜艇鱼雷1
-			1: {api.EquipmentType_SUBMARINE_TORPEDO},      // 潜艇鱼雷2
-			2: {api.EquipmentType_SMALL_CALIBER_MAIN_GUN}, // 潜艇炮
-			3: auxiliaryX2,
-			4: auxiliaryX2,
-		}
-	case "维修":
-		return map[int][]api.EquipmentType{
-			0: antiAirGun,
-			1: antiAirGun,
-			2: antiAirGun,
-			3: auxiliaryX2,
-			4: auxiliaryX2,
-		}
-	}
-	return map[int][]api.EquipmentType{} // 如果是不认识的舰种，就返回空的规则
 }

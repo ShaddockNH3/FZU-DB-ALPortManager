@@ -145,6 +145,7 @@
 import { ref, onMounted } from 'vue'
 import { Ship, Flag, Star, Grid } from '@element-plus/icons-vue'
 import { getStatistics } from '@/api/ship'
+import { rarityColor } from '@/constants/ship'
 
 const statistics = ref({
   totalShips: 0,
@@ -179,19 +180,7 @@ const getFactionColor = (faction) => {
   return colorMap[faction] || '#409eff'
 }
 
-// 获取稀有度颜色
-const getRarityColor = (rarity) => {
-  const colorMap = {
-    '普通': '#909399',
-    '稀有': '#67C23A',
-    '精锐': '#E6A23C',
-    '超稀有': '#F56C6C',
-    '海上传奇': '#C71585',
-    '最高方案': '#8B008B',
-    '决战方案': '#FF1493'
-  }
-  return colorMap[rarity] || '#409eff'
-}
+const getRarityColor = (rarity) => rarityColor(rarity)
 
 // 加载统计数据
 const loadStatistics = async () => {

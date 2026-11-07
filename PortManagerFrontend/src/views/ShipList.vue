@@ -18,13 +18,12 @@
             @change="handleSearch"
             style="width: 180px"
           >
-            <el-option label="普通" value="普通" />
-            <el-option label="稀有" value="稀有" />
-            <el-option label="精锐" value="精锐" />
-            <el-option label="超稀有" value="超稀有" />
-            <el-option label="海上传奇" value="海上传奇" />
-            <el-option label="最高方案 (科研)" value="最高方案" />
-            <el-option label="决战方案 (科研)" value="决战方案" />
+            <el-option
+              v-for="item in RARITY_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="舰种">
@@ -184,13 +183,12 @@
         </el-form-item>
         <el-form-item label="稀有度" prop="rarity">
           <el-select v-model="form.rarity" placeholder="请选择稀有度" style="width: 100%">
-            <el-option label="普通" value="普通" />
-            <el-option label="稀有" value="稀有" />
-            <el-option label="精锐" value="精锐" />
-            <el-option label="超稀有" value="超稀有" />
-            <el-option label="海上传奇" value="海上传奇" />
-            <el-option label="最高方案 (科研)" value="最高方案" />
-            <el-option label="决战方案 (科研)" value="决战方案" />
+            <el-option
+              v-for="item in RARITY_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="舰种" prop="shipType">
@@ -313,6 +311,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, RefreshRight, Plus, Edit, Delete, Minus } from '@element-plus/icons-vue'
 import { useShipStore } from '@/stores/ship'
 import { getShipById, equipShip, getEquipmentList } from '@/api/ship'
+import { RARITY_OPTIONS, initialStars, maxStars, rarityTagType } from '@/constants/ship'
 
 const shipStore = useShipStore()
 
@@ -369,33 +368,9 @@ const rules = {
   ]
 }
 
-// 获取稀有度对应的初始星级
-const getInitialStarsByRarity = (rarity) => {
-  const initialStarsMap = {
-    '普通': 1,
-    '稀有': 2,
-    '精锐': 2,
-    '超稀有': 3,
-    '海上传奇': 3,
-    '最高方案': 3,
-    '决战方案': 3
-  }
-  return initialStarsMap[rarity] || 1
-}
+const getInitialStarsByRarity = (rarity) => initialStars(rarity)
 
-// 获取稀有度对应的最大星级
-const getMaxStarsByRarity = (rarity) => {
-  const maxStarsMap = {
-    '普通': 4,
-    '稀有': 5,
-    '精锐': 5,
-    '超稀有': 6,
-    '海上传奇': 6,
-    '最高方案': 6,
-    '决战方案': 6
-  }
-  return maxStarsMap[rarity] || 3
-}
+const getMaxStarsByRarity = (rarity) => maxStars(rarity)
 
 // 检查是否满星
 const isMaxStars = (ship) => {
@@ -450,19 +425,7 @@ const handleStarChange = async (row, delta) => {
   }
 }
 
-// 获取稀有度标签类型
-const getRarityType = (rarity) => {
-  const typeMap = {
-    '普通': 'info',
-    '稀有': 'success',
-    '精锐': 'warning',
-    '超稀有': 'danger',
-    '海上传奇': 'danger',
-    '最高方案': 'danger',
-    '决战方案': 'danger'
-  }
-  return typeMap[rarity] || 'info'
-}
+const getRarityType = (rarity) => rarityTagType(rarity)
 
 // 加载数据
 const loadData = async () => {
