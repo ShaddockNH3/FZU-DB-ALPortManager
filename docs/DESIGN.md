@@ -58,6 +58,25 @@ handler（HTTP）→ service（用例）→ domain/ship（规则）
 | 槽位越界、装备类型不匹配、兵装槽未解锁、名字为空 | 400 |
 | 其它 | 500 |
 
+## 前端
+
+`ShipList.vue` 原来 794 行：模板 307 行、脚本 418 行，筛选、表格、翻页、两个对话框、装备增删全在一个 `setup` 里。
+
+拆完：
+
+| 文件 | 职责 | 行数 |
+| --- | --- | --- |
+| `views/ShipList.vue` | 只做编排：谁触发什么、结果交给谁 | 95 |
+| `composables/useShipList.js` | 列表状态 + 加载 / 筛选 / 分页 / 升星 / 删除 | 140 |
+| `components/ShipFilterBar.vue` | 筛选条 | 105 |
+| `components/ShipTable.vue` | 表格 + 分页，动作全部往上抛事件 | 125 |
+| `components/ShipFormDialog.vue` | 新建 / 编辑表单，自己校验、自己存 | 145 |
+| `components/EquipmentDialog.vue` | 6 个普通槽 + 兵装槽，装完重新拉一次舰船 | 210 |
+
+顺带清掉三处重复：舰种和阵营的 `<el-option>` 名单（筛选和表单各写一遍）、装备类型数字/字符串两份映射、兵装按舰种过滤的映射。全部收进 `constants/ship.js`。
+
+筛选条直接改父级传进来的 `model` 对象（一个 reactive），改完发 `search`。这样不用为四个字段写四组 `update:modelValue`，代价是组件和父级共享状态——在页内组件里可以接受，跨页面复用就得改成 `v-model`。
+
 ## 代价
 
 - 多了一个包，改装备规则要从 `service` 跳到 `domain`。

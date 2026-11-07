@@ -56,9 +56,11 @@ PortManagerBackend/
 ├── query/ model/       gorm gen 生成，手不改
 └── db/                 两套初始化，靠构建标签切换
 PortManagerFrontend/src/
-├── constants/ship.js   稀有度、星级、配色只在这里定义
+├── constants/ship.js   稀有度、舰种、阵营、装备类型、兵装规则只在这里定义
+├── composables/        列表状态与用例（加载 / 筛选 / 分页 / 升星 / 删除）
+├── components/         筛选条、表格、编辑对话框、装备对话框
 ├── api/ stores/        请求与状态
-└── views/              列表、统计两个页面
+└── views/              页面编排（列表 95 行，统计）
 ```
 
 ## 测试
