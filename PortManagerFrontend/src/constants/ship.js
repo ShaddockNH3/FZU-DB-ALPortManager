@@ -98,3 +98,22 @@ export function augmentsForShipType(augments, shipType) {
   const allowed = AUGMENTS_BY_SHIP_TYPE[shipType] || []
   return augments.filter((augment) => allowed.includes(augment.name))
 }
+
+// 阵营配色：统计页的进度条用，和 FACTIONS 一一对应。
+export const FACTION_COLORS = Object.freeze({
+  白鹰: '#4169E1',
+  皇家: '#FFD700',
+  重樱: '#FF1493',
+  铁血: '#696969',
+  东煌: '#FF4500',
+  北方联合: '#DC143C',
+  自由鸢尾: '#9370DB',
+  维希教廷: '#8B4513',
+  鸢尾教国: '#BA55D3',
+  撒丁帝国: '#228B22',
+  郁金王国: '#FFB6C1',
+  飓风: '#00CED1',
+  META: '#8B008B'
+})
+
+export const factionColor = (faction) => FACTION_COLORS[faction] || '#409eff'

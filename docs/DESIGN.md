@@ -72,6 +72,10 @@ handler（HTTP）→ service（用例）→ domain/ship（规则）
 | `components/ShipTable.vue` | 表格 + 分页，动作全部往上抛事件 | 125 |
 | `components/ShipFormDialog.vue` | 新建 / 编辑表单，自己校验、自己存 | 145 |
 | `components/EquipmentDialog.vue` | 6 个普通槽 + 兵装槽，装完重新拉一次舰船 | 210 |
+| `components/StatCard.vue` | 统计页的指标卡（原来四张卡各写一遍） | 90 |
+| `components/DistributionCard.vue` | 统计页的分布列表（阵营/稀有度/舰种三块共用） | 95 |
+
+统计页 303 行 → 130 行，四张指标卡和三块分布列表各自收敛成一个组件。
 
 顺带清掉三处重复：舰种和阵营的 `<el-option>` 名单（筛选和表单各写一遍）、装备类型数字/字符串两份映射、兵装按舰种过滤的映射。全部收进 `constants/ship.js`。
 
