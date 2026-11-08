@@ -15,15 +15,46 @@
 ## 现在怎么分
 
 ```
-handler（HTTP）→ service（用例）→ domain/ship（规则）
-                      ↑
-                  convert（形状转换）
+handler（表现）→ service（业务）→ dal（数据访问）→ query / model（gorm）
+                    ↓
+              domain/ship（纯规则）
+                    ↑
+              convert（行 ↔ 接口结构）
 ```
 
-- `biz/domain/ship`：纯函数，不碰数据库、不碰 HTTP。装备类型名与枚举互转、舰种对应的槽位规则、星级规则、分页规范化都在这里。
-- `biz/service`：取数、过规则、存回去。`EquipShip` 现在先过三道检查再写库。
-- `biz/convert`：只做数据库行和 API 结构之间的形状转换。
-- `biz/handler`：入口。`errors.go` 里一张小表把领域错误翻成 400/404/500。
+- `biz/handler`：表现层。绑定参数、调 service、`errors.go` 把领域错误翻成 400/404/500。
+- `biz/service`：业务层。编排「取数 → 过规则 → 存回去」，不 import gorm 也不写 SQL。
+- `biz/dal`：数据访问层。`Ship` / `Equipment` 两个结构，方法就是 `GetByID` / `List` / `Create` / `Update` / `Delete` / `UpsertSlot`，找不到记录统一返回 `dal.ErrNotFound`。
+- `biz/domain/ship`：纯函数。装备类型互转、舰种对应的槽位规则、星级规则、分页规范化。
+- `biz/convert`：数据库行 ↔ 接口结构。
+- `query/` `model/`：gorm gen 生成的模型与查询，只有 `dal` 碰。
+
+### 和 fzuhelper-server 的对应关系
+
+参考了 [west2-online/fzuhelper-server](https://github.com/west2-online/fzuhelper-server) 的分层，路径按 hertz 的约定放：
+
+| 那边 | 这边 |
+| --- | --- |
+| `api/handler`、`api/router` | `biz/handler`、`biz/router`（hz 生成） |
+| `api/pack`（模型转换） | `biz/convert` |
+| `internal/<domain>/service` | `biz/service` + `biz/domain/ship` |
+| `pkg/db/<domain>`（`s.db.Course.XXX`） | `biz/dal`（`s.ships.GetByID`、`s.equipments.UpsertSlot`） |
+| `pkg/errno` | `biz/domain/ship/errors.go` + `biz/handler/api/errors.go` |
+| `pkg/constants` | `pkg/constants` |
+
+差别在于那边有 Kitex RPC，HTTP 层只做转发；这里是单体，`biz/service` 直接就是业务实现。
+
+### 生成物改动清单
+
+`hz` 生成的东西基本没动，只碰了一处，列清楚免得下次 `hz update` 之后不知道丢了什么：
+
+| 文件 | 改动 |
+| --- | --- |
+| `biz/handler/api/port_manager_service.go` | 8 行：`sendError` 改成调 `mapError`，几处写死的 500/404 换成 `sendError` |
+| `biz/handler/api/errors.go` | 新增文件（非生成），状态码映射表 |
+| `biz/router/**`、`biz/model/**`、`query/**` | 未改动 |
+
+重跑 `hz update` 会覆盖那 8 行，把 `sendError` 换回 `mapError` 即可。
 
 ## 装备槽规则
 

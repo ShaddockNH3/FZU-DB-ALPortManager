@@ -51,7 +51,8 @@ cd ../PortManagerFrontend && npm install && npm run dev # :5173，/api 代理到
 ```
 PortManagerBackend/
 ├── biz/domain/ship/    纯规则：装备槽匹配、星级、分页（13 个单测）
-├── biz/service/        用例：取数 → 过规则 → 存回去
+├── biz/service/        业务：取数 → 过规则 → 存回去，不碰 gorm
+├── biz/dal/            数据访问：Ship / Equipment 的查、写、删
 ├── biz/convert/        数据库行 ↔ API 结构
 ├── biz/handler/        HTTP 入口，错误码映射在 errors.go
 ├── query/ model/       gorm gen 生成，手不改
