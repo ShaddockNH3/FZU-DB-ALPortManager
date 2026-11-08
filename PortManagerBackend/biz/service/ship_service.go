@@ -6,22 +6,28 @@ import (
 	"sort"
 
 	"FZU-DB-ALPortManager/biz/convert"
+	"FZU-DB-ALPortManager/biz/dal"
 	"FZU-DB-ALPortManager/biz/domain/ship"
 	"FZU-DB-ALPortManager/biz/model/api"
 	"FZU-DB-ALPortManager/model"
-	"FZU-DB-ALPortManager/query"
-
-	"gorm.io/gorm"
 )
 
-// ShipService 是用例层：只做"取数据 → 过一遍领域规则 → 存回去"，
-// 装备槽能不能装、星级几颗这些判断都在 biz/domain/ship。
+// ShipService 业务层：取数 → 过一遍领域规则 → 存回去。
+//
+// 数据访问全在 biz/dal，这一层不出现 gorm、query，也不用处理 ErrRecordNotFound。
+// 装备槽能不能装、星级几颗这些判断在 biz/domain/ship。
 type ShipService struct {
-	ctx context.Context
+	ctx        context.Context
+	ships      *dal.Ship
+	equipments *dal.Equipment
 }
 
 func NewShipService(ctx context.Context) *ShipService {
-	return &ShipService{ctx: ctx}
+	return &ShipService{
+		ctx:        ctx,
+		ships:      dal.NewShip(),
+		equipments: dal.NewEquipment(),
+	}
 }
 
 func (s *ShipService) CreateShip(req *api.Ship) (*api.Ship, error) {
@@ -30,8 +36,11 @@ func (s *ShipService) CreateShip(req *api.Ship) (*api.Ship, error) {
 		return nil, err
 	}
 
-	// 只创建舰船本体，装备槽记录在装备时按需创建
-	if err := query.ShipInfo.WithContext(s.ctx).Create(dbModel); err != nil {
+	if !ship.ValidShipType(req.ShipType) {
+		return nil, ship.ErrUnknownShipType
+	}
+
+	if err := s.ships.Create(s.ctx, dbModel); err != nil {
 		return nil, err
 	}
 
@@ -39,13 +48,9 @@ func (s *ShipService) CreateShip(req *api.Ship) (*api.Ship, error) {
 }
 
 func (s *ShipService) GetShipByID(id int64) (*api.Ship, error) {
-	q := query.ShipInfo
-	dbModel, err := q.WithContext(s.ctx).
-		Preload(q.Equipments.Equipment).
-		Where(q.ID.Eq(uint(id))).
-		First()
+	dbModel, err := s.ships.GetByID(s.ctx, uint(id))
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, dal.ErrNotFound) {
 			return nil, ship.ErrShipNotFound
 		}
 		return nil, err
@@ -54,31 +59,16 @@ func (s *ShipService) GetShipByID(id int64) (*api.Ship, error) {
 }
 
 func (s *ShipService) GetShipList(req *api.GetShipListReq) (*api.GetShipListResp, error) {
-	q := query.ShipInfo.WithContext(s.ctx)
-
-	if req.ShipName != nil && *req.ShipName != "" {
-		q = q.Where(query.ShipInfo.ShipName.Like("%" + *req.ShipName + "%"))
-	}
-	if req.Rarity != nil && *req.Rarity != "" {
-		q = q.Where(query.ShipInfo.Rarity.Eq(*req.Rarity))
-	}
-	if req.ShipType != nil && *req.ShipType != "" {
-		q = q.Where(query.ShipInfo.ShipType.Eq(*req.ShipType))
-	}
-	if req.Faction != nil && *req.Faction != "" {
-		q = q.Where(query.ShipInfo.Faction.Eq(*req.Faction))
-	}
-
-	q = q.Preload(query.ShipInfo.Equipments.Equipment)
-
 	paging := ship.NormalizePaging(int(req.GetPage()), int(req.GetPageSize()))
 
-	total, err := q.Count()
-	if err != nil {
-		return nil, err
+	filter := dal.ListFilter{
+		ShipName: derefString(req.ShipName),
+		Rarity:   derefString(req.Rarity),
+		ShipType: derefString(req.ShipType),
+		Faction:  derefString(req.Faction),
 	}
 
-	dbList, err := q.Offset(paging.Offset).Limit(paging.PageSize).Order(query.ShipInfo.ID.Desc()).Find()
+	dbList, total, err := s.ships.List(s.ctx, filter, paging.Offset, paging.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -96,14 +86,11 @@ func (s *ShipService) UpdateShip(id int64, req *api.Ship) (*api.Ship, error) {
 		return nil, err
 	}
 
-	updates := convert.APIToDBUpdateMap(req)
-	if len(updates) == 0 {
-		return s.GetShipByID(id)
+	if req.ShipType != "" && !ship.ValidShipType(req.ShipType) {
+		return nil, ship.ErrUnknownShipType
 	}
 
-	if _, err := query.ShipInfo.WithContext(s.ctx).
-		Where(query.ShipInfo.ID.Eq(uint(id))).
-		Updates(updates); err != nil {
+	if err := s.ships.Update(s.ctx, uint(id), convert.APIToDBUpdateMap(req)); err != nil {
 		return nil, err
 	}
 
@@ -111,30 +98,15 @@ func (s *ShipService) UpdateShip(id int64, req *api.Ship) (*api.Ship, error) {
 }
 
 func (s *ShipService) DeleteShip(id int64) error {
-	shipID := uint(id)
+	if _, err := s.GetShipByID(id); err != nil {
+		return err
+	}
 
-	return query.Q.Transaction(func(tx *query.Query) error {
-		if _, err := tx.ShipEquipment.WithContext(s.ctx).
-			Where(query.ShipEquipment.ShipID.Eq(shipID)).
-			Delete(); err != nil {
-			return err
-		}
-
-		result, err := tx.ShipInfo.WithContext(s.ctx).
-			Where(query.ShipInfo.ID.Eq(shipID)).
-			Delete()
-		if err != nil {
-			return err
-		}
-		if result.RowsAffected == 0 {
-			return ship.ErrShipNotFound
-		}
-		return nil
-	})
+	return s.ships.Delete(s.ctx, uint(id))
 }
 
 func (s *ShipService) GetStatistics() (*api.GetStatisticsResp, error) {
-	ships, err := query.ShipInfo.WithContext(s.ctx).Find()
+	ships, err := s.ships.All(s.ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +122,6 @@ func (s *ShipService) GetStatistics() (*api.GetStatisticsResp, error) {
 // EquipShip 装/卸装备。
 //
 // 装之前先过三道规则：槽位是否合法、装备类型是否匹配舰种、兵装槽是否已满星。
-// 原来这些判断一个都没有，前端传什么就存什么。
 func (s *ShipService) EquipShip(req *api.EquipShipReq) (*api.Ship, error) {
 	shipID := uint(req.ShipId)
 	slotIndex := int(req.SlotIndex)
@@ -160,11 +131,9 @@ func (s *ShipService) EquipShip(req *api.EquipShipReq) (*api.Ship, error) {
 		return nil, ship.ErrSlotOutOfRange
 	}
 
-	dbShip, err := query.ShipInfo.WithContext(s.ctx).
-		Where(query.ShipInfo.ID.Eq(shipID)).
-		First()
+	dbShip, err := s.ships.GetByID(s.ctx, shipID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, dal.ErrNotFound) {
 			return nil, ship.ErrShipNotFound
 		}
 		return nil, err
@@ -172,11 +141,7 @@ func (s *ShipService) EquipShip(req *api.EquipShipReq) (*api.Ship, error) {
 
 	// equipmentID 为 0 表示卸下这一格
 	if equipmentID == 0 {
-		_, err := query.ShipEquipment.WithContext(s.ctx).
-			Where(query.ShipEquipment.ShipID.Eq(shipID)).
-			Where(query.ShipEquipment.SlotIndex.Eq(slotIndex)).
-			Delete()
-		if err != nil {
+		if err := s.equipments.ClearSlot(s.ctx, shipID, slotIndex); err != nil {
 			return nil, err
 		}
 		return s.GetShipByID(req.ShipId)
@@ -186,7 +151,7 @@ func (s *ShipService) EquipShip(req *api.EquipShipReq) (*api.Ship, error) {
 		return nil, err
 	}
 
-	if err := s.upsertEquipment(shipID, slotIndex, equipmentID); err != nil {
+	if err := s.equipments.UpsertSlot(s.ctx, shipID, slotIndex, equipmentID); err != nil {
 		return nil, err
 	}
 
@@ -194,11 +159,9 @@ func (s *ShipService) EquipShip(req *api.EquipShipReq) (*api.Ship, error) {
 }
 
 func (s *ShipService) checkSlotRules(dbShip *model.ShipInfo, slotIndex int, equipmentID uint) error {
-	equipment, err := query.Equipment.WithContext(s.ctx).
-		Where(query.Equipment.ID.Eq(equipmentID)).
-		First()
+	equipment, err := s.equipments.GetByID(s.ctx, equipmentID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, dal.ErrNotFound) {
 			return ship.ErrEquipmentNotFound
 		}
 		return err
@@ -220,40 +183,17 @@ func (s *ShipService) checkSlotRules(dbShip *model.ShipInfo, slotIndex int, equi
 	return nil
 }
 
-func (s *ShipService) upsertEquipment(shipID uint, slotIndex int, equipmentID uint) error {
-	_, err := query.ShipEquipment.WithContext(s.ctx).
-		Where(query.ShipEquipment.ShipID.Eq(shipID)).
-		Where(query.ShipEquipment.SlotIndex.Eq(slotIndex)).
-		First()
-
-	switch {
-	case err == nil:
-		_, err = query.ShipEquipment.WithContext(s.ctx).
-			Where(query.ShipEquipment.ShipID.Eq(shipID)).
-			Where(query.ShipEquipment.SlotIndex.Eq(slotIndex)).
-			Update(query.ShipEquipment.EquipmentID, equipmentID)
-		return err
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		return query.ShipEquipment.WithContext(s.ctx).Create(&model.ShipEquipment{
-			ShipID:      shipID,
-			SlotIndex:   slotIndex,
-			EquipmentID: equipmentID,
-		})
-	default:
-		return err
-	}
-}
-
 func (s *ShipService) GetEquipmentList(req *api.GetEquipmentListReq) (*api.GetEquipmentListResp, error) {
-	q := query.Equipment.WithContext(s.ctx)
-
+	var typeName string
 	if req.Type != nil {
-		if typeName, err := ship.EquipmentTypeName(*req.Type); err == nil {
-			q = q.Where(query.Equipment.Type.Eq(typeName))
+		name, err := ship.EquipmentTypeName(*req.Type)
+		if err != nil {
+			return nil, err
 		}
+		typeName = name
 	}
 
-	dbList, err := q.Order(query.Equipment.ID).Find()
+	dbList, err := s.equipments.List(s.ctx, typeName)
 	if err != nil {
 		return nil, err
 	}
@@ -292,4 +232,11 @@ func countBy(ships []*model.ShipInfo, pick func(*model.ShipInfo) string) []*api.
 		return stats[i].Name < stats[j].Name
 	})
 	return stats
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
