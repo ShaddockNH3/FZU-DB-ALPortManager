@@ -66,20 +66,58 @@ handler（HTTP）→ service（用例）→ domain/ship（规则）
 
 | 文件 | 职责 | 行数 |
 | --- | --- | --- |
-| `views/ShipList.vue` | 只做编排：谁触发什么、结果交给谁 | 95 |
-| `composables/useShipList.js` | 列表状态 + 加载 / 筛选 / 分页 / 升星 / 删除 | 140 |
-| `components/ShipFilterBar.vue` | 筛选条 | 105 |
-| `components/ShipTable.vue` | 表格 + 分页，动作全部往上抛事件 | 125 |
-| `components/ShipFormDialog.vue` | 新建 / 编辑表单，自己校验、自己存 | 145 |
-| `components/EquipmentDialog.vue` | 6 个普通槽 + 兵装槽，装完重新拉一次舰船 | 210 |
-| `components/StatCard.vue` | 统计页的指标卡（原来四张卡各写一遍） | 90 |
-| `components/DistributionCard.vue` | 统计页的分布列表（阵营/稀有度/舰种三块共用） | 95 |
+| `views/ShipList.vue` | 只做编排：谁触发什么、结果交给谁 | 86 |
+| `composables/useShipList.js` | 列表用例：加载 / 筛选 / 分页 / 升星 / 删除 | 117 |
+| `composables/useEquipmentDialog.js` | 装备用例：选、装、卸、刷新 | 116 |
+| `components/ShipFilterBar.vue` | 筛选条 | 99 |
+| `components/ShipTable.vue` | 表格 + 分页，动作全部往上抛事件 | 113 |
+| `components/ShipFormDialog.vue` | 新建 / 编辑表单，自己校验、自己存 | 149 |
+| `components/EquipmentDialog.vue` | 版面和装备选择弹窗 | 87 |
+| `components/EquipmentSlot.vue` | 单个槽位（普通槽与兵装槽共用） | 87 |
+| `components/StatCard.vue` | 统计页的指标卡（原来四张卡各写一遍） | 80 |
+| `components/DistributionCard.vue` | 统计页的分布列表（阵营/稀有度/舰种三块共用） | 90 |
+| `stores/ship.js` | 列表数据的唯一来源（ships / total / loading） | 47 |
 
-统计页 303 行 → 130 行，四张指标卡和三块分布列表各自收敛成一个组件。
+统计页 303 行 → 95 行，四张指标卡和三块分布列表各自收敛成一个组件；装备对话框 225 行 → 87 行，槽位卡片和用例分别拿出去。
+
+列表数据只存一份在 store 里，`useShipList` 用 `storeToRefs` 取。之前 composable 自己又存了一套 `ships/total/loading`，靠手写赋值同步，两边飘了不会有任何报错。
+
+错误提示只在 `api/index.js` 的响应拦截器里弹一次。之前拦截器弹一次、`catch` 里再弹一次，后端挂掉时页面连着蹦两条一样的红条。
+
+导航菜单和图标从路由 `meta` 生成（`router/index.js` 一处），不再在 `Layout.vue` 里手抄一遍。
 
 顺带清掉三处重复：舰种和阵营的 `<el-option>` 名单（筛选和表单各写一遍）、装备类型数字/字符串两份映射、兵装按舰种过滤的映射。全部收进 `constants/ship.js`。
 
 筛选条直接改父级传进来的 `model` 对象（一个 reactive），改完发 `search`。这样不用为四个字段写四组 `update:modelValue`，代价是组件和父级共享状态——在页内组件里可以接受，跨页面复用就得改成 `v-model`。
+
+## 数据库层
+
+`db/` 原来两个文件 374 / 396 行，其中各有 304 行是同一份装备种子，逐字相同。现在：
+
+| 文件 | 行数 | 干什么 |
+| --- | --- | --- |
+| `db/schema.go` | 388 | 连接串、建表清单、274 条装备种子、按名幂等补数据 |
+| `db/init_postgres.go` | 20 | 用 gorm 官方驱动开连接 |
+| `db/init_opengauss.go` | 28 | 用华为官方驱动开连接，表在就不动结构 |
+
+连接参数不再写死：`pkg/constants` 改成读环境变量，默认值对齐 `docker-compose.yml`。之前 `.env.example` 里列着七个变量，代码里一个都没读——线上那个华为云 IP 和密码是直接写在常量里的。
+
+行为上有一处变化：openGauss 原来只在「建表那一次」写种子，老库加了新装备不会补；现在两种驱动都走幂等补插，缺哪条补哪条。
+
+## 构建与依赖
+
+`go 1.27.0`。之前卡在 Go 1.23，是因为 `sonic v1.14` 用了 Go 1.27 已经删掉的 `GoMapIterator`。这轮把链上几个包一起升了：
+
+| 包 | 前 | 后 |
+| --- | --- | --- |
+| hertz | 0.10.3 | 0.10.6 |
+| sonic | 1.14.0 | 1.15.5 |
+| gorm | 1.24.3 | 1.31.2 |
+| gorm/gen | 0.3.21 | 0.3.29 |
+| gorm/driver/postgres | 1.4.8 | 1.6.3 |
+| pgx | 5.5.5 | 5.10.0 |
+
+`query/` 里的生成代码没重新生成，对着新 gorm 直接编译通过；`go vet -tags postgres ./biz/... ./db/...` 干净，13 个单测照旧全过。`-tags opengauss` 也能编出来，只是没有实例可跑。
 
 ## 代价
 

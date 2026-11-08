@@ -1,5 +1,22 @@
 // 全局样式
 
+// 重置：原来写在 App.vue 的非 scoped 样式里，挪过来跟其它全局规则放一起
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+}
+
 // 滚动条样式
 ::-webkit-scrollbar {
   width: 8px;

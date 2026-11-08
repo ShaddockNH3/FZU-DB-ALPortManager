@@ -1,6 +1,6 @@
 <script setup>
 import { Edit, Delete, Plus, Minus } from '@element-plus/icons-vue'
-import { initialStars, maxStars, rarityTagType } from '@/constants/ship'
+import { initialStars, maxStars, PAGE_SIZES, rarityTagType } from '@/constants/ship'
 
 /**
  * 舰船表格 + 分页。纯展示，所有动作都往上抛事件，状态在父级。
@@ -81,7 +81,7 @@ const emit = defineEmits(['edit', 'delete', 'equip', 'star', 'page-change', 'siz
       class="pagination"
       :current-page="page"
       :page-size="pageSize"
-      :page-sizes="[10, 20, 50, 100]"
+      :page-sizes="PAGE_SIZES"
       :total="total"
       layout="total, sizes, prev, pager, next, jumper"
       @current-change="(value) => emit('page-change', value)"

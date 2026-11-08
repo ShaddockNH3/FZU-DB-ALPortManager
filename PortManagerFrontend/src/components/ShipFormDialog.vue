@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useShipStore } from '@/stores/ship'
-import { RARITY_OPTIONS, SHIP_TYPES, FACTIONS } from '@/constants/ship'
+import { LEVEL_RANGE, RARITY_OPTIONS, SHIP_TYPES, FACTIONS } from '@/constants/ship'
 
 /**
  * 新建 / 编辑舰船的对话框。
@@ -87,8 +87,8 @@ async function submit() {
     close()
     emit('saved')
   } catch (error) {
+    // 提示由拦截器统一弹，这里只留日志
     console.error('提交失败:', error)
-    ElMessage.error('保存失败')
   } finally {
     submitLoading.value = false
   }
@@ -126,7 +126,12 @@ async function submit() {
       </el-form-item>
 
       <el-form-item label="等级" prop="level">
-        <el-input-number v-model="form.level" :min="1" :max="125" class="full-width" />
+        <el-input-number
+          v-model="form.level"
+          :min="LEVEL_RANGE.min"
+          :max="LEVEL_RANGE.max"
+          class="full-width"
+        />
       </el-form-item>
     </el-form>
 

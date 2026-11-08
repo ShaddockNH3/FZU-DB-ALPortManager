@@ -14,13 +14,9 @@
         active-text-color="#ffd04b"
         @select="handleSelect"
       >
-        <el-menu-item index="/ships">
-          <el-icon><List /></el-icon>
-          <span>舰船管理</span>
-        </el-menu-item>
-        <el-menu-item index="/statistics">
-          <el-icon><DataAnalysis /></el-icon>
-          <span>数据统计</span>
+        <el-menu-item v-for="item in menuItems" :key="item.index" :index="item.index">
+          <el-icon><component :is="item.icon" /></el-icon>
+          <span>{{ item.title }}</span>
         </el-menu-item>
       </el-menu>
     </el-header>
@@ -37,12 +33,27 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Ship, List, DataAnalysis } from '@element-plus/icons-vue'
+import { Ship } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
 
 const activeMenu = computed(() => route.path)
+
+/**
+ * 菜单项从路由表里取：标题和图标都在 meta 上，加页面只改 router/index.js。
+ * 之前这里手写了两个 el-menu-item，改路由标题要同步改两处。
+ */
+const menuItems = computed(() => {
+  const layout = router.options.routes.find((item) => item.path === '/')
+  return (layout?.children || [])
+    .filter((child) => child.meta?.title)
+    .map((child) => ({
+      index: child.path,
+      title: child.meta.title,
+      icon: child.meta.icon
+    }))
+})
 
 const handleSelect = (key) => {
   router.push(key)

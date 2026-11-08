@@ -117,3 +117,10 @@ export const FACTION_COLORS = Object.freeze({
 })
 
 export const factionColor = (faction) => FACTION_COLORS[faction] || '#409eff'
+
+// 页面级常量。原来 5（兵装槽）、125（等级上限）、[10,20,50,100]（每页条数）
+// 分别散在装备对话框、表单和表格里，改一个要翻三个文件。
+export const AUGMENT_SLOT_INDEX = 5
+export const LEVEL_RANGE = Object.freeze({ min: 1, max: 125 })
+export const PAGE_SIZES = Object.freeze([10, 20, 50, 100])
+export const DEFAULT_PAGE_SIZE = 10

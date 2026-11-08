@@ -1,41 +1,36 @@
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive } from 'vue'
+import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useShipStore } from '@/stores/ship'
-import { initialStars, maxStars } from '@/constants/ship'
+import { DEFAULT_PAGE_SIZE, initialStars, maxStars } from '@/constants/ship'
 
 const emptyFilter = () => ({ shipName: '', rarity: '', shipType: '', faction: '' })
 
 /**
  * 舰船列表页的状态与用例：加载、筛选、分页、升星、删除。
  *
- * 原来这些全写在 ShipList.vue 的 setup 里，和模板、对话框搅在一起；
- * 抽出来之后页面组件只负责拼装，逻辑可以单独读。
+ * 列表数据只有一份：store 里的 ships / total / loading。
+ * 之前这里又存了一份 ref，两边靠手写赋值同步，改一处忘了另一处就开始飘。
  */
 export function useShipList() {
-  const shipStore = useShipStore()
+  const store = useShipStore()
+  const { ships, total, loading } = storeToRefs(store)
 
   const filterForm = reactive(emptyFilter())
-  const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
-  const ships = ref([])
-  const loading = ref(false)
+  const pagination = reactive({ page: 1, pageSize: DEFAULT_PAGE_SIZE })
 
   /** 拉列表。空筛选项不发，免得后端按空字符串过滤。 */
   async function load() {
-    loading.value = true
-    try {
-      const params = { page: pagination.page, pageSize: pagination.pageSize }
-      Object.entries(filterForm).forEach(([key, value]) => {
-        if (value) params[key] = value
-      })
+    const params = { page: pagination.page, pageSize: pagination.pageSize }
+    Object.entries(filterForm).forEach(([key, value]) => {
+      if (value) params[key] = value
+    })
 
-      const data = await shipStore.fetchShipList(params)
-      ships.value = data.ships || []
-      pagination.total = data.total || 0
+    try {
+      await store.fetchShipList(params)
     } catch (error) {
-      console.error('加载数据失败:', error)
-      ElMessage.error('加载舰船列表失败')
-    } finally {
-      loading.value = false
+      // 提示由拦截器统一弹，这里只留日志
+      console.error('加载舰船列表失败:', error)
     }
   }
 
@@ -68,7 +63,7 @@ export function useShipList() {
     }
 
     try {
-      await shipStore.updateShip(ship.id, {
+      await store.updateShip(ship.id, {
         shipName: ship.shipName,
         rarity: ship.rarity,
         shipType: ship.shipType,
@@ -80,7 +75,6 @@ export function useShipList() {
       await load()
     } catch (error) {
       console.error('星级调整失败:', error)
-      ElMessage.error('星级调整失败')
     }
   }
 
@@ -96,12 +90,11 @@ export function useShipList() {
     }
 
     try {
-      await shipStore.deleteShip(ship.id)
+      await store.deleteShip(ship.id)
       ElMessage.success('删除成功')
       await load()
     } catch (error) {
       console.error('删除失败:', error)
-      ElMessage.error('删除失败')
     }
   }
 
@@ -111,6 +104,7 @@ export function useShipList() {
     filterForm,
     pagination,
     ships,
+    total,
     loading,
     load,
     search,

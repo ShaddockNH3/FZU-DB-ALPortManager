@@ -1,6 +1,5 @@
 <script setup>
 import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
 import { getShipById } from '@/api/ship'
 import { useShipList } from '@/composables/useShipList'
 import ShipFilterBar from '@/components/ShipFilterBar.vue'
@@ -13,6 +12,7 @@ const {
   filterForm,
   pagination,
   ships,
+  total,
   loading,
   load,
   search,
@@ -45,7 +45,6 @@ async function openEquipment(ship) {
     equipmentVisible.value = true
   } catch (error) {
     console.error('获取舰船装备信息失败:', error)
-    ElMessage.error('获取舰船装备信息失败')
   }
 }
 </script>
@@ -65,7 +64,7 @@ async function openEquipment(ship) {
       :loading="loading"
       :page="pagination.page"
       :page-size="pagination.pageSize"
-      :total="pagination.total"
+      :total="total"
       @edit="openEdit"
       @delete="remove"
       @equip="openEquipment"
@@ -74,17 +73,9 @@ async function openEquipment(ship) {
       @size-change="changePageSize"
     />
 
-    <ship-form-dialog
-      v-model:visible="formVisible"
-      :ship="editingShip"
-      @saved="load"
-    />
+    <ship-form-dialog v-model:visible="formVisible" :ship="editingShip" @saved="load" />
 
-    <equipment-dialog
-      v-model:visible="equipmentVisible"
-      :ship="equipmentShip"
-      @changed="load"
-    />
+    <equipment-dialog v-model:visible="equipmentVisible" :ship="equipmentShip" @changed="load" />
   </div>
 </template>
 
