@@ -3,6 +3,7 @@ import { NButton, NCard, NForm, NFormItem, NIcon, NInput, NSelect } from 'naive-
 import { PhMagnifyingGlass, PhPlus, PhArrowCounterClockwise } from '@phosphor-icons/vue'
 import { FACTIONS, RARITY_OPTIONS, SHIP_TYPES } from '@/constants/ship'
 
+
 /**
  * 筛选条。model 是父级的 reactive 对象，这里直接改它的字段，
  * 改完发 search 让父级重新拉数据（下拉框 change 也即时触发）。
@@ -21,7 +22,7 @@ const factionOptions = FACTIONS.map((faction) => ({ label: faction, value: facti
 
 <template>
   <n-card size="small" class="filter-card">
-    <n-form inline label-placement="left" :show-feedback="false" class="filter-form">
+    <n-form inline label-placement="left" :label-width="76" :show-feedback="false" class="filter-form">
       <n-form-item label="舰船名称">
         <n-input
           v-model:value="model.shipName"

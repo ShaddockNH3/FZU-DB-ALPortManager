@@ -137,4 +137,16 @@ function go(key) {
     padding: 16px 12px 32px;
   }
 }
+
+// 更窄的时候菜单只留图标，不然文字被压成「航…」
+@media (max-width: 520px) {
+  :deep(.n-menu-item-content-header) {
+    display: none;
+  }
+
+  :deep(.n-menu-item-content) {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
 </style>

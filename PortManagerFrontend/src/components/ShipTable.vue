@@ -23,7 +23,7 @@ const TAG_TYPES = { info: 'default', success: 'success', warning: 'warning', dan
 
 const pageSizes = PAGE_SIZES.map((size) => ({ label: `${size} 条/页`, value: size }))
 
-const { isCompact, isNarrow } = useBreakpoints()
+const { isCompact, isNarrow, isTiny } = useBreakpoints()
 
 function starCell(row) {
   const minusDisabled = row.stars <= initialStars(row.rarity)
@@ -37,8 +37,12 @@ function starCell(row) {
       disabled: minusDisabled,
       onClick: () => emit('star', row, -1)
     }, { icon: () => h(NIcon, null, { default: () => h(PhMinus) }) }),
-    h('span', { style: 'min-width:52px;text-align:center;font-variant-numeric:tabular-nums' },
-      `${row.stars}★${plusDisabled ? ' 满' : ''}`),
+    h('span', {
+      title: plusDisabled ? '已满星' : '',
+      style: `min-width:${isTiny.value ? 40 : 52}px;text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums`
+    },
+      // 窄屏放不下"满"字，会折成两行，用 title 兜住
+      `${row.stars}★${plusDisabled && !isTiny.value ? ' 满' : ''}`),
     h(NButton, {
       size: 'tiny',
       circle: true,
@@ -54,7 +58,7 @@ function actionCell(row) {
   const iconOnly = isCompact.value
   const label = (text) => (iconOnly ? {} : { default: () => text })
 
-  return h('div', { style: 'display:flex;gap:6px' }, [
+  return h('div', { style: `display:flex;gap:${iconOnly ? 4 : 6}px` }, [
     h(NButton, {
       size: 'tiny',
       secondary: true,
@@ -84,11 +88,12 @@ function actionCell(row) {
 // 列的取舍顺序：先丢创建时间，再丢 ID / 舰种 / 阵营 / 等级，名称和操作永远留着
 const baseColumns = [
   { title: 'ID', key: 'id', width: 70, sorter: (a, b) => a.id - b.id, hideOn: 'narrow' },
-  { title: '舰船名称', key: 'shipName', minWidth: 140 },
+  { title: '舰船名称', key: 'shipName', minWidth: isTiny.value ? 96 : 140 },
   {
     title: '稀有度',
     key: 'rarity',
     width: 108,
+    hideOn: 'tiny',
     render: (row) =>
       h(NTag, {
         size: 'small',
@@ -98,7 +103,7 @@ const baseColumns = [
   },
   { title: '舰种', key: 'shipType', width: 100, hideOn: 'narrow' },
   { title: '阵营', key: 'faction', width: 110, hideOn: 'narrow' },
-  { title: '星级', key: 'stars', width: 150, render: starCell },
+  { title: '星级', key: 'stars', width: isTiny.value ? 120 : 150, render: starCell },
   {
     title: '等级',
     key: 'level',
@@ -110,21 +115,23 @@ const baseColumns = [
   {
     title: '操作',
     key: 'actions',
-    width: isCompact.value ? 116 : 214,
+    width: isTiny.value ? 100 : isCompact.value ? 116 : 214,
     render: actionCell
   }
 ]
 
 const columns = computed(() =>
   baseColumns.filter((column) => {
-    if (column.hideOn === 'compact' && isCompact.value) return false
+    if (column.hideOn === 'tiny' && isTiny.value) return false
     if (column.hideOn === 'narrow' && isNarrow.value) return false
+    if (column.hideOn === 'compact' && isCompact.value) return false
     return true
   })
 )
 
 // 横向滚动的宽度跟着留几列走，不然窄屏会滚出一大片空白
 const scrollX = computed(() => {
+  if (isTiny.value) return 300
   if (isNarrow.value) return 520
   if (isCompact.value) return 800
   return 1180

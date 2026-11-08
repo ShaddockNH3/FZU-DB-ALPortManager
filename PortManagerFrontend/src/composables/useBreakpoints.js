@@ -19,6 +19,8 @@ export function useBreakpoints() {
     /** < 1100：表格藏掉次要列 */
     isCompact: computed(() => width.value < 1100),
     /** < 720：筛选条改成竖排、分页退成简版 */
-    isNarrow: computed(() => width.value < 720)
+    isNarrow: computed(() => width.value < 720),
+    /** < 520：手机上只留名称、星级、操作三列 */
+    isTiny: computed(() => width.value < 520)
   }
 }

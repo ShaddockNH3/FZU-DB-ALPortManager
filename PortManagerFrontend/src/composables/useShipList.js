@@ -4,7 +4,8 @@ import { useShipStore } from '@/stores/ship'
 import { dialog, message } from '@/utils/feedback'
 import { DEFAULT_PAGE_SIZE, initialStars, maxStars } from '@/constants/ship'
 
-const emptyFilter = () => ({ shipName: '', rarity: '', shipType: '', faction: '' })
+// 下拉框空值用 null：空字符串在 Naive 里算“有值”，placeholder 就不显示了
+const emptyFilter = () => ({ shipName: '', rarity: null, shipType: null, faction: null })
 
 /**
  * 舰船列表页的状态与用例：加载、筛选、分页、升星、删除。
