@@ -86,6 +86,20 @@ handler（HTTP）→ service（用例）→ domain/ship（规则）
 
 导航菜单和图标从路由 `meta` 生成（`router/index.js` 一处），不再在 `Layout.vue` 里手抄一遍。
 
+### 界面
+
+这一版把 Element Plus 换成了 **Naive UI + Phosphor 图标**，原因有三个：
+
+1. 之前是紫色渐变整页背景 + 半透明磨砂卡片 + 白色文字，属于「深色/花底」那一路，跟这套后台该有的浅色底正相反。
+2. 卡片、按钮、表格的样式有相当一部分是自己拿 `div` 加 CSS 拼的，组件库的能力没用上。
+3. Element Plus 的产物 1147 KB，Naive UI 按需引入之后主包 281 KB。
+
+现在：底色 `#f4f6fa`、卡片纯白、主色深蓝 `#1e40af`、强调金 `#c8963e`，全部写在 `theme.js` 的 `themeOverrides` 里，组件内不写死颜色。布局用 `NLayout` / `NGrid` / `NCard`，表格 `NDataTable`，指标 `NStatistic`，分布 `NProgress`，弹窗 `NModal`，图标统一 Phosphor。
+
+提示走 `utils/feedback.js` 里的离散 API（`createDiscreteApi`），因为 `useMessage` 只能在组件 setup 里用，而拦截器和 composable 都要弹。
+
+顺带修了两处：创建时间列原先被挤成两行；装备名过长会撑出槽位卡片（标签现在换行）。
+
 顺带清掉三处重复：舰种和阵营的 `<el-option>` 名单（筛选和表单各写一遍）、装备类型数字/字符串两份映射、兵装按舰种过滤的映射。全部收进 `constants/ship.js`。
 
 筛选条直接改父级传进来的 `model` 对象（一个 reactive），改完发 `search`。这样不用为四个字段写四组 `update:modelValue`，代价是组件和父级共享状态——在页内组件里可以接受，跨页面复用就得改成 `v-model`。

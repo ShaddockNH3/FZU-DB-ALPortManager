@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
 import { equipShip, getEquipmentList, getShipById } from '@/api/ship'
+import { message } from '@/utils/feedback'
 import { AUGMENT_SLOT_INDEX, augmentsForShipType, isMaxStars } from '@/constants/ship'
 
 /**
@@ -56,7 +56,7 @@ export function useEquipmentDialog(getShip) {
     currentSlot.value = slotIndex
 
     if (pool.length === 0) {
-      ElMessage.warning('该栏位暂无可用装备')
+      message.warning('该栏位暂无可用装备')
       return
     }
 
@@ -70,7 +70,7 @@ export function useEquipmentDialog(getShip) {
         slotIndex: currentSlot.value,
         equipmentId: equipment.id
       })
-      ElMessage.success('装备成功')
+      message.success('装备成功')
       pickerVisible.value = false
       await refresh()
     } catch (error) {
@@ -84,7 +84,7 @@ export function useEquipmentDialog(getShip) {
     busy.value = true
     try {
       await equipShip(currentShip.value.id, { slotIndex, equipmentId: 0 })
-      ElMessage.success('卸下装备成功')
+      message.success('卸下装备成功')
       await refresh()
     } catch (error) {
       console.error('卸下装备失败:', error)

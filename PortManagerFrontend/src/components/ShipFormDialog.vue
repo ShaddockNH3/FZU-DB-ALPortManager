@@ -1,8 +1,17 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import {
+  NButton,
+  NForm,
+  NFormItem,
+  NInput,
+  NInputNumber,
+  NModal,
+  NSelect
+} from 'naive-ui'
 import { useShipStore } from '@/stores/ship'
-import { LEVEL_RANGE, RARITY_OPTIONS, SHIP_TYPES, FACTIONS } from '@/constants/ship'
+import { message } from '@/utils/feedback'
+import { FACTIONS, LEVEL_RANGE, RARITY_OPTIONS, SHIP_TYPES } from '@/constants/ship'
 
 /**
  * 新建 / 编辑舰船的对话框。
@@ -31,14 +40,23 @@ const form = reactive({
 })
 
 const rules = {
-  shipName: [{ required: true, message: '请输入舰船名称', trigger: 'blur' }],
-  rarity: [{ required: true, message: '请选择稀有度', trigger: 'change' }],
-  shipType: [{ required: true, message: '请选择舰种', trigger: 'change' }],
-  faction: [{ required: true, message: '请选择阵营', trigger: 'change' }]
+  shipName: { required: true, message: '请输入舰船名称', trigger: ['input', 'blur'] },
+  rarity: { required: true, message: '请选择稀有度', trigger: ['change', 'blur'] },
+  shipType: { required: true, message: '请选择舰种', trigger: ['change', 'blur'] },
+  faction: { required: true, message: '请选择阵营', trigger: ['change', 'blur'] }
 }
+
+const rarityOptions = RARITY_OPTIONS.map((item) => ({ label: item.label, value: item.value }))
+const shipTypeOptions = SHIP_TYPES.map((type) => ({ label: type, value: type }))
+const factionOptions = FACTIONS.map((faction) => ({ label: faction, value: faction }))
 
 const isEdit = computed(() => Boolean(form.id))
 const title = computed(() => (isEdit.value ? '编辑舰船' : '添加舰船'))
+
+const show = computed({
+  get: () => props.visible,
+  set: (value) => emit('update:visible', value)
+})
 
 watch(
   () => props.visible,
@@ -56,11 +74,11 @@ function fillForm(ship) {
     faction: ship?.faction ?? '',
     level: ship?.level || 1
   })
-  formRef.value?.clearValidate()
+  formRef.value?.restoreValidation()
 }
 
 function close() {
-  emit('update:visible', false)
+  show.value = false
 }
 
 async function submit() {
@@ -79,10 +97,10 @@ async function submit() {
   try {
     if (isEdit.value) {
       await shipStore.updateShip(form.id, payload)
-      ElMessage.success('更新成功')
+      message.success('更新成功')
     } else {
       await shipStore.createShip(payload)
-      ElMessage.success('添加成功')
+      message.success('添加成功')
     }
     close()
     emit('saved')
@@ -96,54 +114,52 @@ async function submit() {
 </script>
 
 <template>
-  <el-dialog :model-value="visible" :title="title" width="600px" @update:model-value="close">
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-      <el-form-item label="舰船名称" prop="shipName">
-        <el-input v-model="form.shipName" placeholder="请输入舰船名称" />
-      </el-form-item>
+  <n-modal
+    v-model:show="show"
+    preset="card"
+    :title="title"
+    style="width: 560px; max-width: 92vw"
+  >
+    <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" label-width="88">
+      <n-form-item label="舰船名称" path="shipName">
+        <n-input v-model:value="form.shipName" placeholder="例如：企业" />
+      </n-form-item>
 
-      <el-form-item label="稀有度" prop="rarity">
-        <el-select v-model="form.rarity" placeholder="请选择稀有度" class="full-width">
-          <el-option
-            v-for="item in RARITY_OPTIONS"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          />
-        </el-select>
-      </el-form-item>
+      <n-form-item label="稀有度" path="rarity">
+        <n-select v-model:value="form.rarity" :options="rarityOptions" placeholder="请选择" />
+      </n-form-item>
 
-      <el-form-item label="舰种" prop="shipType">
-        <el-select v-model="form.shipType" placeholder="请选择舰种" class="full-width">
-          <el-option v-for="type in SHIP_TYPES" :key="type" :label="type" :value="type" />
-        </el-select>
-      </el-form-item>
+      <n-form-item label="舰种" path="shipType">
+        <n-select v-model:value="form.shipType" :options="shipTypeOptions" placeholder="请选择" />
+      </n-form-item>
 
-      <el-form-item label="阵营" prop="faction">
-        <el-select v-model="form.faction" placeholder="请选择阵营" class="full-width">
-          <el-option v-for="faction in FACTIONS" :key="faction" :label="faction" :value="faction" />
-        </el-select>
-      </el-form-item>
+      <n-form-item label="阵营" path="faction">
+        <n-select v-model:value="form.faction" :options="factionOptions" placeholder="请选择" />
+      </n-form-item>
 
-      <el-form-item label="等级" prop="level">
-        <el-input-number
-          v-model="form.level"
+      <n-form-item label="等级" path="level">
+        <n-input-number
+          v-model:value="form.level"
           :min="LEVEL_RANGE.min"
           :max="LEVEL_RANGE.max"
-          class="full-width"
+          style="width: 100%"
         />
-      </el-form-item>
-    </el-form>
+      </n-form-item>
+    </n-form>
 
     <template #footer>
-      <el-button @click="close">取消</el-button>
-      <el-button type="primary" :loading="submitLoading" @click="submit">确定</el-button>
+      <div class="modal-footer">
+        <n-button quaternary @click="close">取消</n-button>
+        <n-button type="primary" :loading="submitLoading" @click="submit">确定</n-button>
+      </div>
     </template>
-  </el-dialog>
+  </n-modal>
 </template>
 
-<style scoped>
-.full-width {
-  width: 100%;
+<style lang="scss" scoped>
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 </style>

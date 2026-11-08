@@ -1,80 +1,54 @@
 <script setup>
+import { NCard, NIcon, NStatistic } from 'naive-ui'
+
 /**
- * 顶部指标卡。原来四张卡的模板各写一遍，只有图标、标题、数值和渐变不同。
+ * 顶部指标卡。四张卡只有图标、文案、数值和颜色不同，模板只留一份。
  */
 defineProps({
   label: { type: String, required: true },
   value: { type: [Number, String], default: 0 },
   icon: { type: Object, required: true },
-  tone: { type: String, default: 'total' }
+  color: { type: String, default: '#1e40af' },
+  unit: { type: String, default: '' }
 })
 </script>
 
 <template>
-  <el-card class="stat-card" :class="`${tone}-card`" shadow="hover">
-    <div class="stat-content">
-      <el-icon class="stat-icon" :size="48"><component :is="icon" /></el-icon>
-      <div class="stat-info">
-        <div class="stat-label">{{ label }}</div>
-        <div class="stat-value">{{ value }}</div>
+  <n-card size="small" class="stat-card">
+    <div class="row">
+      <div class="badge" :style="{ background: `${color}14`, color }">
+        <n-icon :size="22"><component :is="icon" weight="duotone" /></n-icon>
       </div>
+
+      <n-statistic :label="label" :value="value">
+        <template v-if="unit" #suffix>
+          <span class="unit">{{ unit }}</span>
+        </template>
+      </n-statistic>
     </div>
-  </el-card>
+  </n-card>
 </template>
 
 <style lang="scss" scoped>
-.stat-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border: none;
-  transition: all 0.3s ease;
-
-  &:hover {
-    transform: translateY(-5px);
-  }
-}
-
-.stat-content {
+.row {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
 }
 
-.stat-icon {
-  color: #fff;
-  padding: 15px;
+.badge {
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.stat-info {
-  flex: 1;
-}
-
-.stat-label {
-  font-size: 14px;
-  color: #909399;
-  margin-bottom: 8px;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: bold;
-  color: #303133;
-}
-
-.total-card .stat-icon {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.faction-card .stat-icon {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.rarity-card .stat-icon {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-}
-
-.type-card .stat-icon {
-  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+.unit {
+  font-size: 13px;
+  color: #8b95a7;
+  margin-left: 2px;
 }
 </style>

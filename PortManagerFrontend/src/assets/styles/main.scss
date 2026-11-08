@@ -1,6 +1,7 @@
-// 全局样式
+// 全局样式：只留重置和底色。
+// 卡片、按钮、表格、菜单的样式全部由 Naive UI 主题接管（见 src/theme.js），
+// 页面里不再手写这些。
 
-// 重置：原来写在 App.vue 的非 scoped 样式里，挪过来跟其它全局规则放一起
 * {
   margin: 0;
   padding: 0;
@@ -11,58 +12,40 @@ html,
 body,
 #app {
   width: 100%;
-  height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-    'Noto Color Emoji';
+  min-height: 100%;
+  background: #f4f6fa;
+  color: #1f2937;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-// 滚动条样式
+// 细一点的滚动条，跟浅色底对得上
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.3);
+  background: #d5dbe6;
   border-radius: 4px;
-
-  &:hover {
-    background: rgba(0, 0, 0, 0.5);
-  }
 }
 
-// Element Plus 样式覆盖
-.el-card {
-  border-radius: 12px;
-  overflow: hidden;
+::-webkit-scrollbar-thumb:hover {
+  background: #bcc5d4;
 }
 
-.el-button {
-  border-radius: 6px;
+// 浅色底上纯白卡片容易糊成一片，给一层很淡的投影拉出层次
+.n-card {
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 28px -20px rgba(16, 24, 40, 0.18);
 }
 
-.el-input__wrapper {
-  border-radius: 6px;
+// 时间、数字这类不该换行的单元格（NDataTable 的 className 走全局）
+.n-data-table .nowrap {
+  white-space: nowrap;
 }
 
-.el-select {
-  .el-input__wrapper {
-    border-radius: 6px;
-  }
-}
-
-.el-table {
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.el-dialog {
-  border-radius: 12px;
-  overflow: hidden;
-}

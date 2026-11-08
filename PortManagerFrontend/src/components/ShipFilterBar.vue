@@ -1,6 +1,7 @@
 <script setup>
-import { Search, RefreshRight, Plus } from '@element-plus/icons-vue'
-import { RARITY_OPTIONS, SHIP_TYPES, FACTIONS } from '@/constants/ship'
+import { NButton, NCard, NForm, NFormItem, NIcon, NInput, NSelect } from 'naive-ui'
+import { PhMagnifyingGlass, PhPlus, PhArrowCounterClockwise } from '@phosphor-icons/vue'
+import { FACTIONS, RARITY_OPTIONS, SHIP_TYPES } from '@/constants/ship'
 
 /**
  * 筛选条。model 是父级的 reactive 对象，这里直接改它的字段，
@@ -12,88 +13,103 @@ defineProps({
 })
 
 const emit = defineEmits(['search', 'reset', 'add'])
+
+const rarityOptions = RARITY_OPTIONS.map((item) => ({ label: item.label, value: item.value }))
+const shipTypeOptions = SHIP_TYPES.map((type) => ({ label: type, value: type }))
+const factionOptions = FACTIONS.map((faction) => ({ label: faction, value: faction }))
 </script>
 
 <template>
-  <el-card class="filter-card" shadow="hover">
-    <el-form :inline="true" :model="model" class="filter-form">
-      <el-form-item label="舰船名称">
-        <el-input
-          v-model="model.shipName"
-          placeholder="请输入舰船名称"
+  <n-card size="small" class="filter-card">
+    <n-form inline label-placement="left" :show-feedback="false" class="filter-form">
+      <n-form-item label="舰船名称">
+        <n-input
+          v-model:value="model.shipName"
+          placeholder="搜索舰船名称"
           clearable
+          class="input-name"
           @clear="emit('search')"
+          @keyup.enter="emit('search')"
         />
-      </el-form-item>
+      </n-form-item>
 
-      <el-form-item label="稀有度">
-        <el-select
-          v-model="model.rarity"
-          placeholder="请选择稀有度"
+      <n-form-item label="稀有度">
+        <n-select
+          v-model:value="model.rarity"
+          :options="rarityOptions"
+          placeholder="全部"
           clearable
-          class="select-rarity"
-          @change="emit('search')"
-        >
-          <el-option
-            v-for="item in RARITY_OPTIONS"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          />
-        </el-select>
-      </el-form-item>
+          class="select"
+          @update:value="emit('search')"
+        />
+      </n-form-item>
 
-      <el-form-item label="舰种">
-        <el-select
-          v-model="model.shipType"
-          placeholder="请选择舰种"
+      <n-form-item label="舰种">
+        <n-select
+          v-model:value="model.shipType"
+          :options="shipTypeOptions"
+          placeholder="全部"
           clearable
-          class="select-narrow"
-          @change="emit('search')"
-        >
-          <el-option v-for="type in SHIP_TYPES" :key="type" :label="type" :value="type" />
-        </el-select>
-      </el-form-item>
+          class="select"
+          @update:value="emit('search')"
+        />
+      </n-form-item>
 
-      <el-form-item label="阵营">
-        <el-select
-          v-model="model.faction"
-          placeholder="请选择阵营"
+      <n-form-item label="阵营">
+        <n-select
+          v-model:value="model.faction"
+          :options="factionOptions"
+          placeholder="全部"
           clearable
-          class="select-narrow"
-          @change="emit('search')"
-        >
-          <el-option v-for="faction in FACTIONS" :key="faction" :label="faction" :value="faction" />
-        </el-select>
-      </el-form-item>
+          class="select"
+          @update:value="emit('search')"
+        />
+      </n-form-item>
 
-      <el-form-item>
-        <el-button type="primary" :icon="Search" :loading="loading" @click="emit('search')">
+      <n-form-item class="actions">
+        <n-button type="primary" :loading="loading" @click="emit('search')">
+          <template #icon>
+            <n-icon><PhMagnifyingGlass /></n-icon>
+          </template>
           搜索
-        </el-button>
-        <el-button :icon="RefreshRight" @click="emit('reset')">重置</el-button>
-        <el-button type="success" :icon="Plus" @click="emit('add')">添加舰船</el-button>
-      </el-form-item>
-    </el-form>
-  </el-card>
+        </n-button>
+
+        <n-button quaternary @click="emit('reset')">
+          <template #icon>
+            <n-icon><PhArrowCounterClockwise /></n-icon>
+          </template>
+          重置
+        </n-button>
+
+        <n-button type="primary" secondary @click="emit('add')">
+          <template #icon>
+            <n-icon><PhPlus weight="bold" /></n-icon>
+          </template>
+          添加舰船
+        </n-button>
+      </n-form-item>
+    </n-form>
+  </n-card>
 </template>
 
 <style lang="scss" scoped>
 .filter-card {
-  margin-bottom: 20px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-}
-
-.select-rarity {
-  width: 180px;
-}
-
-.select-narrow {
-  width: 150px;
+  margin-bottom: 16px;
 }
 
 .filter-form {
-  row-gap: 8px;
+  row-gap: 12px;
+}
+
+.input-name {
+  width: 200px;
+}
+
+.select {
+  width: 148px;
+}
+
+.actions {
+  margin-left: auto;
 }
 </style>

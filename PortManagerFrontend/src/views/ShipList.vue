@@ -50,7 +50,12 @@ async function openEquipment(ship) {
 </script>
 
 <template>
-  <div class="ship-list-container">
+  <div class="page">
+    <header class="page-head">
+      <h2>舰船管理</h2>
+      <p>共 {{ total }} 艘在册，点星级两侧的 ± 升降星</p>
+    </header>
+
     <ship-filter-bar
       :model="filterForm"
       :loading="loading"
@@ -80,7 +85,19 @@ async function openEquipment(ship) {
 </template>
 
 <style lang="scss" scoped>
-.ship-list-container {
-  padding: 4px;
+.page-head {
+  margin-bottom: 18px;
+
+  h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  p {
+    margin-top: 4px;
+    font-size: 13px;
+    color: #8b95a7;
+  }
 }
 </style>

@@ -1,14 +1,14 @@
-<template>
-  <div id="app" class="app-container">
-    <router-view />
-  </div>
-</template>
+<script setup>
+import { NConfigProvider, NDialogProvider, NMessageProvider, dateZhCN, zhCN } from 'naive-ui'
+import { themeOverrides } from '@/theme'
+</script>
 
-<!-- 全局重置与底色在 assets/styles/main.scss，这里只留骨架 -->
-<style lang="scss" scoped>
-.app-container {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-</style>
+<template>
+  <n-config-provider :theme-overrides="themeOverrides" :locale="zhCN" :date-locale="dateZhCN">
+    <n-message-provider>
+      <n-dialog-provider>
+        <router-view />
+      </n-dialog-provider>
+    </n-message-provider>
+  </n-config-provider>
+</template>

@@ -1,6 +1,6 @@
 # FZU-DB-ALPortManager
 
-福州大学 2025 数据库实践大作业：碧蓝航线风格的港口管理系统，Go（Hertz + GORM Gen）+ Vue 3，数据跑在华为云 openGauss 上。
+福州大学 2025 数据库实践大作业：碧蓝航线风格的港口管理系统，Go（Hertz + GORM Gen）+ Vue 3（Naive UI），数据跑在华为云 openGauss 上。
 
 ## 快速开始
 
@@ -60,6 +60,8 @@ PortManagerBackend/
     ├── init_postgres.go 本地 PostgreSQL（-tags postgres）
     └── init_opengauss.go 华为云 openGauss（-tags opengauss）
 PortManagerFrontend/src/
+├── theme.js            浅色调色板与 Naive UI themeOverrides，颜色只在这里改
+├── utils/feedback.js   全局 message / dialog（组件外也能弹提示）
 ├── constants/ship.js   稀有度、舰种、阵营、装备类型、兵装规则只在这里定义
 ├── composables/        列表状态（useShipList）、装备对话框用例（useEquipmentDialog）
 ├── components/         筛选条、表格、编辑对话框、装备对话框、装备槽位、统计卡片

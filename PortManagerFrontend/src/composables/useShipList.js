@@ -1,7 +1,7 @@
 import { onMounted, reactive } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { useShipStore } from '@/stores/ship'
+import { dialog, message } from '@/utils/feedback'
 import { DEFAULT_PAGE_SIZE, initialStars, maxStars } from '@/constants/ship'
 
 const emptyFilter = () => ({ shipName: '', rarity: '', shipType: '', faction: '' })
@@ -71,27 +71,37 @@ export function useShipList() {
         level: ship.level,
         stars: nextStars
       })
-      ElMessage.success(delta > 0 ? '升星成功' : '降星成功')
+      message.success(delta > 0 ? '升星成功' : '降星成功')
       await load()
     } catch (error) {
       console.error('星级调整失败:', error)
     }
   }
 
-  async function remove(ship) {
-    try {
-      await ElMessageBox.confirm(`确定要删除舰船"${ship.shipName}"吗？`, '提示', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
+  /** 删除前确认。Naive 的 dialog 没有 Promise 版本，这里包一层。 */
+  function confirmDelete(ship) {
+    return new Promise((resolve) => {
+      dialog.warning({
+        title: '删除确认',
+        content: `确定要删除舰船「${ship.shipName}」吗？`,
+        positiveText: '删除',
+        negativeText: '取消',
+        onPositiveClick: () => resolve(true),
+        onNegativeClick: () => resolve(false),
+        onClose: () => resolve(false),
+        onMaskClick: () => resolve(false)
       })
-    } catch {
-      return // 用户点了取消
+    })
+  }
+
+  async function remove(ship) {
+    if (!(await confirmDelete(ship))) {
+      return
     }
 
     try {
       await store.deleteShip(ship.id)
-      ElMessage.success('删除成功')
+      message.success('删除成功')
       await load()
     } catch (error) {
       console.error('删除失败:', error)

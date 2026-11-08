@@ -1,11 +1,13 @@
 <script setup>
-import { Edit, Delete, Plus, Minus } from '@element-plus/icons-vue'
+import { computed, h } from 'vue'
+import { NButton, NCard, NDataTable, NIcon, NPagination, NTag } from 'naive-ui'
+import { PhMinus, PhPencilSimple, PhPlus, PhSword, PhTrash } from '@phosphor-icons/vue'
 import { initialStars, maxStars, PAGE_SIZES, rarityTagType } from '@/constants/ship'
 
 /**
  * 舰船表格 + 分页。纯展示，所有动作都往上抛事件，状态在父级。
  */
-defineProps({
+const props = defineProps({
   ships: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   page: { type: Number, default: 1 },
@@ -14,100 +16,113 @@ defineProps({
 })
 
 const emit = defineEmits(['edit', 'delete', 'equip', 'star', 'page-change', 'size-change'])
+
+// 稀有度的标签色：领域里叫 danger，Naive 里叫 error
+const TAG_TYPES = { info: 'default', success: 'success', warning: 'warning', danger: 'error' }
+
+const pageSizes = PAGE_SIZES.map((size) => ({ label: `${size} 条/页`, value: size }))
+
+function starCell(row) {
+  const minusDisabled = row.stars <= initialStars(row.rarity)
+  const plusDisabled = row.stars >= maxStars(row.rarity)
+
+  return h('div', { style: 'display:flex;align-items:center;gap:6px' }, [
+    h(NButton, {
+      size: 'tiny',
+      circle: true,
+      quaternary: true,
+      disabled: minusDisabled,
+      onClick: () => emit('star', row, -1)
+    }, { icon: () => h(NIcon, null, { default: () => h(PhMinus) }) }),
+    h('span', { style: 'min-width:52px;text-align:center;font-variant-numeric:tabular-nums' },
+      `${row.stars}★${plusDisabled ? ' 满' : ''}`),
+    h(NButton, {
+      size: 'tiny',
+      circle: true,
+      quaternary: true,
+      disabled: plusDisabled,
+      onClick: () => emit('star', row, 1)
+    }, { icon: () => h(NIcon, null, { default: () => h(PhPlus) }) })
+  ])
+}
+
+function actionCell(row) {
+  return h('div', { style: 'display:flex;gap:6px' }, [
+    h(NButton, {
+      size: 'tiny',
+      secondary: true,
+      type: 'primary',
+      onClick: () => emit('edit', row)
+    }, { icon: () => h(NIcon, null, { default: () => h(PhPencilSimple) }), default: () => '编辑' }),
+    h(NButton, {
+      size: 'tiny',
+      secondary: true,
+      onClick: () => emit('equip', row)
+    }, { icon: () => h(NIcon, null, { default: () => h(PhSword) }), default: () => '装备' }),
+    h(NButton, {
+      size: 'tiny',
+      quaternary: true,
+      type: 'error',
+      onClick: () => emit('delete', row)
+    }, { icon: () => h(NIcon, null, { default: () => h(PhTrash) }), default: () => '删除' })
+  ])
+}
+
+const columns = computed(() => [
+  { title: 'ID', key: 'id', width: 70, sorter: (a, b) => a.id - b.id },
+  { title: '舰船名称', key: 'shipName', minWidth: 150 },
+  {
+    title: '稀有度',
+    key: 'rarity',
+    width: 120,
+    render: (row) =>
+      h(NTag, {
+        size: 'small',
+        bordered: false,
+        type: TAG_TYPES[rarityTagType(row.rarity)] || 'default'
+      }, { default: () => row.rarity })
+  },
+  { title: '舰种', key: 'shipType', width: 100 },
+  { title: '阵营', key: 'faction', width: 110 },
+  { title: '星级', key: 'stars', width: 160, render: starCell },
+  { title: '等级', key: 'level', width: 90, sorter: (a, b) => a.level - b.level },
+  { title: '创建时间', key: 'createdAt', width: 190, className: 'nowrap' },
+  { title: '操作', key: 'actions', width: 240, render: actionCell }
+])
 </script>
 
 <template>
-  <el-card class="table-card" shadow="hover">
-    <el-table
-      :data="ships"
-      v-loading="loading"
-      stripe
-      style="width: 100%"
-      :default-sort="{ prop: 'id', order: 'descending' }"
-    >
-      <el-table-column prop="id" label="ID" width="80" sortable />
-      <el-table-column prop="shipName" label="舰船名称" min-width="150" />
-
-      <el-table-column prop="rarity" label="稀有度" width="150">
-        <template #default="{ row }">
-          <el-tag :type="rarityTagType(row.rarity)">{{ row.rarity }}</el-tag>
-        </template>
-      </el-table-column>
-
-      <el-table-column prop="shipType" label="舰种" width="120" />
-      <el-table-column prop="faction" label="阵营" width="150" />
-
-      <el-table-column label="星级" width="180">
-        <template #default="{ row }">
-          <div class="star-cell">
-            <el-button
-              size="small"
-              :icon="Minus"
-              circle
-              :disabled="row.stars <= initialStars(row.rarity)"
-              @click="emit('star', row, -1)"
-            />
-            <span class="star-count">
-              {{ row.stars }}★ {{ row.stars >= maxStars(row.rarity) ? '(满)' : '' }}
-            </span>
-            <el-button
-              size="small"
-              :icon="Plus"
-              circle
-              :disabled="row.stars >= maxStars(row.rarity)"
-              @click="emit('star', row, 1)"
-            />
-          </div>
-        </template>
-      </el-table-column>
-
-      <el-table-column prop="level" label="等级" width="100" sortable />
-      <el-table-column prop="createdAt" label="创建时间" width="180" />
-
-      <el-table-column label="操作" width="300" fixed="right">
-        <template #default="{ row }">
-          <el-button type="primary" size="small" :icon="Edit" @click="emit('edit', row)">
-            编辑
-          </el-button>
-          <el-button type="success" size="small" @click="emit('equip', row)">装备</el-button>
-          <el-button type="danger" size="small" :icon="Delete" @click="emit('delete', row)">
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <el-pagination
-      class="pagination"
-      :current-page="page"
-      :page-size="pageSize"
-      :page-sizes="PAGE_SIZES"
-      :total="total"
-      layout="total, sizes, prev, pager, next, jumper"
-      @current-change="(value) => emit('page-change', value)"
-      @size-change="(value) => emit('size-change', value)"
+  <n-card size="small">
+    <n-data-table
+      :columns="columns"
+      :data="props.ships"
+      :loading="props.loading"
+      :bordered="false"
+      :row-key="(row) => row.id"
+      :scroll-x="1100"
+      size="medium"
     />
-  </el-card>
+
+    <div class="pager">
+      <n-pagination
+        :page="props.page"
+        :page-size="props.pageSize"
+        :item-count="props.total"
+        :page-sizes="pageSizes"
+        show-size-picker
+        show-quick-jumper
+        :disabled="props.loading"
+        @update:page="(value) => emit('page-change', value)"
+        @update:page-size="(value) => emit('size-change', value)"
+      />
+    </div>
+  </n-card>
 </template>
 
 <style lang="scss" scoped>
-.table-card {
-  background: rgba(255, 255, 255, 0.95);
-}
-
-.star-cell {
+.pager {
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.star-count {
-  min-width: 80px;
-  text-align: center;
-}
-
-.pagination {
-  margin-top: 16px;
   justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>
