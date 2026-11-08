@@ -81,6 +81,15 @@ handler（表现）→ service（业务）→ dal（数据访问）→ query / m
 
 后端 `stars.go` 和前端 `constants/ship.js` 各存一份，改的时候两边一起改——前端要提前显示星级，绕不开。
 
+## 统计
+
+`GetStatistics` 现在是三条 `GROUP BY`（阵营 / 稀有度 / 舰种）加一次 `COUNT(*)`。
+之前是把 `ship_info` 整表 `Find` 到内存里再数——几百条感觉不出来，上万条就是白搬一次全表。
+
+分组列只认 `dal.StatField` 的三个常量，不接受调用方传任意列名拼 SQL。
+排序放在 Go 里（数量倒序、同数量按名称升序）：PostgreSQL 和 openGauss 对中文的排序规则不一样，
+只信 SQL 的话同一份数据在两边顺序可能不同，界面就会闪。
+
 ## 错误码
 
 | 领域错误 | HTTP |

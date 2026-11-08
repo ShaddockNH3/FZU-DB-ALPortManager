@@ -3,6 +3,7 @@ package dal
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"FZU-DB-ALPortManager/model"
 	"FZU-DB-ALPortManager/query"
@@ -73,12 +74,52 @@ func (Ship) List(ctx context.Context, filter ListFilter, offset, limit int) ([]*
 	return rows, total, nil
 }
 
-// All 取全部舰船，统计用。
-func (Ship) All(ctx context.Context) ([]*model.ShipInfo, error) {
-	rows, err := query.ShipInfo.WithContext(ctx).Find()
+// GroupCount 分组计数的一行。
+type GroupCount struct {
+	Name  string
+	Count int64
+}
+
+// StatField 允许拿来分组的列。只放开这三个，
+// 别让调用方把任意列名当参数拼进 SQL。
+type StatField string
+
+const (
+	StatByFaction  StatField = "faction"
+	StatByRarity   StatField = "rarity"
+	StatByShipType StatField = "ship_type"
+)
+
+var statFields = map[StatField]bool{
+	StatByFaction:  true,
+	StatByRarity:   true,
+	StatByShipType: true,
+}
+
+// Count 舰船总数。
+func (Ship) Count(ctx context.Context) (int64, error) {
+	return query.ShipInfo.WithContext(ctx).Count()
+}
+
+// CountBy 按某列分组计数，交给数据库做 GROUP BY。
+// 之前是把整张表 Find 到内存里再数，几条和几万条的开销差一个量级。
+func (Ship) CountBy(ctx context.Context, column StatField) ([]GroupCount, error) {
+	if !statFields[column] {
+		return nil, fmt.Errorf("dal: 不支持的分组列 %q", column)
+	}
+
+	var rows []GroupCount
+	db := query.ShipInfo.WithContext(ctx).UnderlyingDB()
+
+	err := db.Model(&model.ShipInfo{}).
+		Select(string(column)+" AS name", "COUNT(*) AS count").
+		Group(string(column)).
+		Order("count DESC, name ASC").
+		Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
+
 	return rows, nil
 }
 

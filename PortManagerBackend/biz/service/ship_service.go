@@ -106,16 +106,31 @@ func (s *ShipService) DeleteShip(id int64) error {
 }
 
 func (s *ShipService) GetStatistics() (*api.GetStatisticsResp, error) {
-	ships, err := s.ships.All(s.ctx)
+	total, err := s.ships.Count(s.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	factions, err := s.ships.CountBy(s.ctx, dal.StatByFaction)
+	if err != nil {
+		return nil, err
+	}
+
+	rarities, err := s.ships.CountBy(s.ctx, dal.StatByRarity)
+	if err != nil {
+		return nil, err
+	}
+
+	shipTypes, err := s.ships.CountBy(s.ctx, dal.StatByShipType)
 	if err != nil {
 		return nil, err
 	}
 
 	return &api.GetStatisticsResp{
-		TotalShips:    int64(len(ships)),
-		FactionStats:  countBy(ships, func(m *model.ShipInfo) string { return m.Faction }),
-		RarityStats:   countBy(ships, func(m *model.ShipInfo) string { return m.Rarity }),
-		ShipTypeStats: countBy(ships, func(m *model.ShipInfo) string { return m.ShipType }),
+		TotalShips:    total,
+		FactionStats:  toStatItems(factions),
+		RarityStats:   toStatItems(rarities),
+		ShipTypeStats: toStatItems(shipTypes),
 	}, nil
 }
 
@@ -214,24 +229,23 @@ func (s *ShipService) GetEquipmentList(req *api.GetEquipmentListReq) (*api.GetEq
 	return &api.GetEquipmentListResp{Equipments: equipments}, nil
 }
 
-// countBy 按某个字段分组计数，按数量倒序、同数量按名称升序，界面不会每次刷新换顺序。
-func countBy(ships []*model.ShipInfo, pick func(*model.ShipInfo) string) []*api.StatItem {
-	counts := make(map[string]int64, len(ships))
-	for _, item := range ships {
-		counts[pick(item)]++
+// toStatItems 转成接口结构，顺带按「数量倒序、同数量按名称升序」排一遍。
+// 排序放在 Go 里而不是只信 SQL：不同数据库对中文的排序规则不一样，
+// 同一份数据在 PostgreSQL 和 openGauss 上顺序可能不同，界面就会闪。
+func toStatItems(rows []dal.GroupCount) []*api.StatItem {
+	items := make([]*api.StatItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, &api.StatItem{Name: row.Name, Count: row.Count})
 	}
 
-	stats := make([]*api.StatItem, 0, len(counts))
-	for name, count := range counts {
-		stats = append(stats, &api.StatItem{Name: name, Count: count})
-	}
-	sort.Slice(stats, func(i, j int) bool {
-		if stats[i].Count != stats[j].Count {
-			return stats[i].Count > stats[j].Count
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Count != items[j].Count {
+			return items[i].Count > items[j].Count
 		}
-		return stats[i].Name < stats[j].Name
+		return items[i].Name < items[j].Name
 	})
-	return stats
+
+	return items
 }
 
 func derefString(value *string) string {
