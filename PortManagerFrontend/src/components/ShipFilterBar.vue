@@ -97,8 +97,20 @@ const factionOptions = FACTIONS.map((faction) => ({ label: faction, value: facti
   margin-bottom: 16px;
 }
 
+// 一行放不下就换行，别把按钮挤到卡片外面
 .filter-form {
-  row-gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+
+  :deep(.n-form-item) {
+    margin: 0;
+  }
+
+  :deep(.n-form-item-blank) {
+    gap: 8px;
+  }
 }
 
 .input-name {
@@ -111,5 +123,21 @@ const factionOptions = FACTIONS.map((faction) => ({ label: faction, value: facti
 
 .actions {
   margin-left: auto;
+}
+
+// 窄屏：每个字段独占一行，按钮回到左边
+@media (max-width: 760px) {
+  .filter-form :deep(.n-form-item) {
+    width: 100%;
+  }
+
+  .input-name,
+  .select {
+    width: 100%;
+  }
+
+  .actions {
+    margin-left: 0;
+  }
 }
 </style>

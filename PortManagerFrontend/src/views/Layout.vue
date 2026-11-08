@@ -117,4 +117,24 @@ function go(key) {
   margin: 0 auto;
   padding: 24px 28px 40px;
 }
+
+// 手机上把留白收一收，不然表格挤得只剩两条
+@media (max-width: 760px) {
+  .header-inner {
+    padding: 0 12px;
+    gap: 12px;
+  }
+
+  .brand-text span {
+    display: none;
+  }
+
+  .brand-text h1 {
+    font-size: 15px;
+  }
+
+  .content-inner {
+    padding: 16px 12px 32px;
+  }
+}
 </style>

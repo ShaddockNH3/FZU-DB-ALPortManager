@@ -3,6 +3,7 @@ import { computed, h } from 'vue'
 import { NButton, NCard, NDataTable, NIcon, NPagination, NTag } from 'naive-ui'
 import { PhMinus, PhPencilSimple, PhPlus, PhSword, PhTrash } from '@phosphor-icons/vue'
 import { initialStars, maxStars, PAGE_SIZES, rarityTagType } from '@/constants/ship'
+import { useBreakpoints } from '@/composables/useBreakpoints'
 
 /**
  * 舰船表格 + 分页。纯展示，所有动作都往上抛事件，状态在父级。
@@ -21,6 +22,8 @@ const emit = defineEmits(['edit', 'delete', 'equip', 'star', 'page-change', 'siz
 const TAG_TYPES = { info: 'default', success: 'success', warning: 'warning', danger: 'error' }
 
 const pageSizes = PAGE_SIZES.map((size) => ({ label: `${size} 条/页`, value: size }))
+
+const { isCompact, isNarrow } = useBreakpoints()
 
 function starCell(row) {
   const minusDisabled = row.stars <= initialStars(row.rarity)
@@ -47,34 +50,45 @@ function starCell(row) {
 }
 
 function actionCell(row) {
+  // 窄屏只留图标：三个带文字的按钮要 200px，图标版 100px 就够
+  const iconOnly = isCompact.value
+  const label = (text) => (iconOnly ? {} : { default: () => text })
+
   return h('div', { style: 'display:flex;gap:6px' }, [
     h(NButton, {
       size: 'tiny',
       secondary: true,
       type: 'primary',
+      circle: iconOnly,
+      title: '编辑',
       onClick: () => emit('edit', row)
-    }, { icon: () => h(NIcon, null, { default: () => h(PhPencilSimple) }), default: () => '编辑' }),
+    }, { icon: () => h(NIcon, null, { default: () => h(PhPencilSimple) }), ...label('编辑') }),
     h(NButton, {
       size: 'tiny',
       secondary: true,
+      circle: iconOnly,
+      title: '装备',
       onClick: () => emit('equip', row)
-    }, { icon: () => h(NIcon, null, { default: () => h(PhSword) }), default: () => '装备' }),
+    }, { icon: () => h(NIcon, null, { default: () => h(PhSword) }), ...label('装备') }),
     h(NButton, {
       size: 'tiny',
       quaternary: true,
       type: 'error',
+      circle: iconOnly,
+      title: '删除',
       onClick: () => emit('delete', row)
-    }, { icon: () => h(NIcon, null, { default: () => h(PhTrash) }), default: () => '删除' })
+    }, { icon: () => h(NIcon, null, { default: () => h(PhTrash) }), ...label('删除') })
   ])
 }
 
-const columns = computed(() => [
-  { title: 'ID', key: 'id', width: 70, sorter: (a, b) => a.id - b.id },
-  { title: '舰船名称', key: 'shipName', minWidth: 150 },
+// 列的取舍顺序：先丢创建时间，再丢 ID / 舰种 / 阵营 / 等级，名称和操作永远留着
+const baseColumns = [
+  { title: 'ID', key: 'id', width: 70, sorter: (a, b) => a.id - b.id, hideOn: 'narrow' },
+  { title: '舰船名称', key: 'shipName', minWidth: 140 },
   {
     title: '稀有度',
     key: 'rarity',
-    width: 120,
+    width: 108,
     render: (row) =>
       h(NTag, {
         size: 'small',
@@ -82,13 +96,39 @@ const columns = computed(() => [
         type: TAG_TYPES[rarityTagType(row.rarity)] || 'default'
       }, { default: () => row.rarity })
   },
-  { title: '舰种', key: 'shipType', width: 100 },
-  { title: '阵营', key: 'faction', width: 110 },
-  { title: '星级', key: 'stars', width: 160, render: starCell },
-  { title: '等级', key: 'level', width: 90, sorter: (a, b) => a.level - b.level },
-  { title: '创建时间', key: 'createdAt', width: 190, className: 'nowrap' },
-  { title: '操作', key: 'actions', width: 240, render: actionCell }
-])
+  { title: '舰种', key: 'shipType', width: 100, hideOn: 'narrow' },
+  { title: '阵营', key: 'faction', width: 110, hideOn: 'narrow' },
+  { title: '星级', key: 'stars', width: 150, render: starCell },
+  {
+    title: '等级',
+    key: 'level',
+    width: 88,
+    sorter: (a, b) => a.level - b.level,
+    hideOn: 'compact'
+  },
+  { title: '创建时间', key: 'createdAt', width: 186, className: 'nowrap', hideOn: 'compact' },
+  {
+    title: '操作',
+    key: 'actions',
+    width: isCompact.value ? 116 : 214,
+    render: actionCell
+  }
+]
+
+const columns = computed(() =>
+  baseColumns.filter((column) => {
+    if (column.hideOn === 'compact' && isCompact.value) return false
+    if (column.hideOn === 'narrow' && isNarrow.value) return false
+    return true
+  })
+)
+
+// 横向滚动的宽度跟着留几列走，不然窄屏会滚出一大片空白
+const scrollX = computed(() => {
+  if (isNarrow.value) return 520
+  if (isCompact.value) return 800
+  return 1180
+})
 </script>
 
 <template>
@@ -99,7 +139,7 @@ const columns = computed(() => [
       :loading="props.loading"
       :bordered="false"
       :row-key="(row) => row.id"
-      :scroll-x="1100"
+      :scroll-x="scrollX"
       size="medium"
     />
 
@@ -109,8 +149,10 @@ const columns = computed(() => [
         :page-size="props.pageSize"
         :item-count="props.total"
         :page-sizes="pageSizes"
-        show-size-picker
-        show-quick-jumper
+        :simple="isNarrow"
+        :show-size-picker="!isNarrow"
+        :show-quick-jumper="!isNarrow"
+        :page-slot="isCompact ? 5 : 9"
         :disabled="props.loading"
         @update:page="(value) => emit('page-change', value)"
         @update:page-size="(value) => emit('size-change', value)"
@@ -123,6 +165,8 @@ const columns = computed(() => [
 .pager {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 16px;
 }
 </style>
