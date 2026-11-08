@@ -114,6 +114,10 @@ func APIToDBUpdateMap(req *api.Ship) map[string]interface{} {
 	if req.Rarity != "" {
 		updates["rarity"] = req.Rarity
 	}
+	// 舰种此前漏了：前端能改，接口返回 200，库里没动。一并补上。
+	if req.ShipType != "" {
+		updates["ship_type"] = req.ShipType
+	}
 	if req.Faction != "" {
 		updates["faction"] = req.Faction
 	}

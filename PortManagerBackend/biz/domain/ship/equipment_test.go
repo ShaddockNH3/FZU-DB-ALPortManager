@@ -100,3 +100,24 @@ func TestIsValidSlot(t *testing.T) {
 		t.Error("越界槽位不算合法")
 	}
 }
+
+// ShipTypes 和 AcceptableTypes 的 switch 是两份东西，容易改一处漏一处。
+// 这条用例保证列表里的每个舰种都真能算出槽位。
+func TestShipTypesMatchAcceptableTypes(t *testing.T) {
+	for _, shipType := range ShipTypes {
+		slots := AcceptableTypes(shipType)
+		if len(slots[0]) == 0 {
+			t.Errorf("%s 在 ShipTypes 里，但 AcceptableTypes 没给它槽位", shipType)
+		}
+		if !ValidShipType(shipType) {
+			t.Errorf("%s 应该是合法舰种", shipType)
+		}
+	}
+
+	if ValidShipType("不存在的舰种") {
+		t.Error("未知舰种不该通过校验")
+	}
+	if ValidShipType("") {
+		t.Error("空舰种不该通过校验")
+	}
+}

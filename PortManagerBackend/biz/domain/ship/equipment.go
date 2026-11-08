@@ -51,6 +51,23 @@ func IsValidSlot(slot int) bool {
 	return slot >= 0 && slot <= AugmentSlotIndex
 }
 
+// ShipTypes 支持的舰种，和下面 AcceptableTypes 的 switch 一一对应。
+// 新增舰种两处一起改，ship_test 里有一条用例盯着两者是否一致。
+var ShipTypes = []string{
+	"驱逐", "轻巡", "重巡", "战列", "战巡", "航母", "轻航", "潜艇", "维修",
+}
+
+// ValidShipType 判断舰种受不受支持。建船和改船都要过这一关，
+// 否则库里会躺着一个所有槽位都装不了东西的"未知舰种"。
+func ValidShipType(shipType string) bool {
+	for _, name := range ShipTypes {
+		if name == shipType {
+			return true
+		}
+	}
+	return false
+}
+
 // AcceptableTypes 返回该舰种每个槽位能装的装备类型。
 //
 // 一律返回 5 个槽（不认识的舰种给空列表），调用方不用再判 nil；

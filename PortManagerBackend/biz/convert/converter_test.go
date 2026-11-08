@@ -106,3 +106,17 @@ func TestAPIToDBUpdateMapSkipsEmptyFields(t *testing.T) {
 		t.Error("传了等级应该更新等级")
 	}
 }
+
+// 之前更新映射里没有 ship_type：前端能改舰种，接口 200，库里没变。
+func TestAPIToDBUpdateMapIncludesShipType(t *testing.T) {
+	updates := APIToDBUpdateMap(&api.Ship{ShipType: "重巡"})
+
+	if updates["ship_type"] != "重巡" {
+		t.Errorf("舰种应该写进更新字段，实际 %#v", updates)
+	}
+
+	// 不传就不动，别拿空字符串把已有舰种冲掉
+	if _, ok := APIToDBUpdateMap(&api.Ship{})["ship_type"]; ok {
+		t.Error("没传舰种不该出现在更新字段里")
+	}
+}
